@@ -1,0 +1,36 @@
+# Secrets & Sensitive
+hugging_face_token.txt
+.env
+
+# Paper Drafts & Manuscript (Excluding from public repo)
+*.tex
+Paper_Draft*.md
+Literature*.txt
+Literature*.docx
+
+# Output Results
+# We exclude large logs but allow images for the README
+results/*.json
+results/*.pdf
+results/*.zip
+!results/*.png
+!results/*.jpg
+
+# Datasets and Weights
+data/coco/
+data/*.json
+data/*.parquet
+data/*.safetensors
+*.bin
+
+# Application caches & Metadata
+cache/
+.cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes

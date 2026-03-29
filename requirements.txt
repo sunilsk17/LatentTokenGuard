@@ -1,0 +1,40 @@
+# LatentTokenGuard — Hallucination Detection for LVLMs
+# Core dependencies
+
+# Deep Learning
+torch>=2.1.0
+torchvision>=0.16.0
+
+# HuggingFace ecosystem
+transformers==4.43.0
+accelerate>=0.27.0
+datasets>=2.19.0
+huggingface_hub>=0.22.0
+peft>=0.10.0           # For optional LoRA fine-tuning
+bitsandbytes>=0.43.0   # For 4-bit quantization (optional, GPU only)
+
+# Vision & Image processing
+Pillow>=10.0.0
+timm>=0.9.0
+
+# NLP / Token extraction
+spacy>=3.7.0
+# Run: python -m spacy download en_core_web_sm
+
+# COCO tools
+pycocotools>=2.0.7
+
+# Evaluation & Metrics
+scikit-learn>=1.3.0
+numpy>=1.24.0
+
+# Utilities
+tqdm>=4.66.0
+pyyaml>=6.0
+requests>=2.31.0
+matplotlib>=3.7.0     # For plotting results
+seaborn>=0.12.0       # For visualization
+pandas>=2.0.0         # For results tables
+
+# Testing
+pytest>=7.4.0
