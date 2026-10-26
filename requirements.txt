@@ -26,6 +26,7 @@ pycocotools>=2.0.7
 
 # Evaluation & Metrics
 scikit-learn>=1.3.0
+scipy>=1.10.0          # rank-based AUROC in caption_bench/evaluate.py
 numpy>=1.24.0
 
 # Utilities

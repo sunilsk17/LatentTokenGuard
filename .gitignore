@@ -34,3 +34,6 @@ __pycache__/
 ._*
 .Spotlight-V100
 .Trashes
+
+# Caption benchmark feature arrays (hundreds of MB per run; publish as a release asset instead)
+results/caption_runs/*/feats/

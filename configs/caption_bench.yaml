@@ -1,0 +1,70 @@
+# =====================================================
+# Caption benchmark: object hallucination detection in free-form captions
+# Used by experiments/caption_run.py and experiments/caption_eval.py
+# =====================================================
+
+prompt: "Please describe this image in detail."
+
+data:
+  images_dir: "./data/coco/val2017"
+  instances_file: "./data/coco/annotations/instances_val2017.json"
+  captions_file: "./data/coco/annotations/captions_val2017.json"
+
+models:
+  # Main model for the paper. Needs a CUDA GPU.
+  # A100 (40GB): fp16 as below. T4 (16GB): set load_in_4bit: true.
+  llava15_7b:
+    id: "llava-hf/llava-1.5-7b-hf"
+    prompt_template: "USER: <image>\n{prompt} ASSISTANT:"
+    dtype: "float16"
+    load_in_4bit: false
+    use_fast_tokenizer: false   # same tokenizer as models/llava_wrapper.py
+    device: "auto"
+    max_new_tokens: 512
+
+  # Same model, 4-bit NF4, for a 16 GB T4 (Kaggle / Colab free tier)
+  llava15_7b_4bit:
+    id: "llava-hf/llava-1.5-7b-hf"
+    prompt_template: "USER: <image>\n{prompt} ASSISTANT:"
+    dtype: "float16"
+    load_in_4bit: true
+    use_fast_tokenizer: false
+    device: "auto"
+    max_new_tokens: 512
+
+  llava15_13b:
+    id: "llava-hf/llava-1.5-13b-hf"
+    prompt_template: "USER: <image>\n{prompt} ASSISTANT:"
+    dtype: "float16"
+    load_in_4bit: true
+    use_fast_tokenizer: false
+    device: "auto"
+    max_new_tokens: 512
+
+  # Small real model for local debugging (~1.7 GB download, runs on Apple MPS)
+  llava_interleave_0p5b:
+    id: "llava-hf/llava-interleave-qwen-0.5b-hf"
+    prompt_template: "<|im_start|>user <image>\n{prompt}<|im_end|><|im_start|>assistant"
+    dtype: "float16"
+    load_in_4bit: false
+    device: "auto"
+    max_new_tokens: 256
+
+  # 17 MB random-weight LLaVA-1.5 (real tokenizer and image processor, tiny
+  # layers). Checks shapes and plumbing only; its captions are noise.
+  # Build once with: python experiments/make_tiny_llava.py
+  tiny_llava15:
+    id: "./cache/tiny-llava15"
+    prompt_template: "USER: <image>\n{prompt} ASSISTANT:"
+    dtype: "float32"
+    load_in_4bit: false
+    use_fast_tokenizer: false
+    device: "cpu"
+    max_new_tokens: 40
+
+evaluation:
+  calib_fraction: 0.5      # images used to pick layers / thresholds; the rest is the test set
+  split_seed: 0
+  bootstrap: 1000          # resamples (over images) for 95% confidence intervals
+  first_mention_only: true # score each object class once per caption, as GLSim does
+  keep_real: 0.95          # detect-then-remove: threshold keeps this share of real objects (on calib)
