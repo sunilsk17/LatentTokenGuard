@@ -30,6 +30,7 @@ LLaVA-1.5-7B needs about 14 GB in fp16, and 4-bit loading requires CUDA. Evaluat
    - Images are split into calibration and test halves.
    - Layers, statistic, score sign and thresholds are selected on calibration images only.
    - Test-set AUROC and AUPR are reported, with 95% bootstrap intervals over images. The positive class is a hallucinated object.
+   - Objects named late in a long caption are hallucinated far more often than early ones (Zhou et al., ICLR 2024), and hidden-state similarity also drifts with position. Every detector is therefore also scored within caption-position bins: deciles of the object's token index, with edges set on calibration. The reported value is the size-weighted mean AUROC over bins.
    - Detect-then-remove: CHAIR_i and CHAIR_s are reported before and after removing flagged objects, at a threshold that keeps 95% of real calibration objects.
 
 Each run folder contains:
@@ -43,11 +44,13 @@ Each run folder contains:
 | Name | Description |
 |---|---|
 | NLL, Entropy | Next-token probability baselines |
+| Token position | Index of the object's token in the caption; uses no model internals |
 | Internal Confidence | Jiang et al., ICLR 2025; max over layers, and the best calibration layer |
 | Max-patch cosine, same layer | Object-level form of the LatentTokenGuard score and of ContextualLens (Phukan et al., NAACL 2025) |
 | Max-patch cosine, layer pair | Same score with text and image layers selected separately |
 | Top-k mean cosine, Peakedness, Global cosine | Variants of the patch-similarity score |
 | Best latent stat (at / pre) | Best statistic at the object token, or at the position that predicted it |
+| Best latent stat, position-corrected | Layers and statistic chosen by within-position AUROC on calibration; the score of a real object at the same position (cubic in log position, fit on real calibration objects) is subtracted |
 | Fusion | Rank average of NLL (and Internal Confidence) with the best latent statistic |
 
 ## Notes

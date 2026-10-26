@@ -28,9 +28,10 @@ from caption_bench.evaluate import build_detectors, evaluate_run, load_run, spli
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-ROC_DETECTORS = ["NLL", "Internal Confidence (calib layer)",
+ROC_DETECTORS = ["NLL", "Token position", "Internal Confidence (calib layer)",
                  "Max-patch cosine, same layer (LTG/ContextualLens)",
-                 "Best latent stat (at)", "Fusion: NLL + best latent"]
+                 "Best latent stat (at)", "Best latent stat, position-corrected",
+                 "Fusion: NLL + best latent"]
 
 
 def fmt_ci(value, ci):
@@ -39,6 +40,7 @@ def fmt_ci(value, ci):
 
 def write_markdown(result: dict, run_info: dict, path: str):
     s = result["summary"]
+    share = s["position_bins"]["test_hallucinated_share"]
     lines = [
         f"# Object hallucination detection: {run_info['model']['model_id']}",
         "",
@@ -49,19 +51,26 @@ def write_markdown(result: dict, run_info: dict, path: str):
         f"CHAIR on test captions: CHAIR_i {100 * result['chair_test']['CHAIR_i']:.1f}, "
         f"CHAIR_s {100 * result['chair_test']['CHAIR_s']:.1f}",
         "",
-        "| Detector | AUROC [95% CI] | AUPR [95% CI] | Selected on calib | CHAIR_i after removal | Real objects kept |",
-        "|---|---|---|---|---|---|",
+        f"Hallucinated share by caption-position bin, earliest to latest ({len(share)} bins): "
+        + ", ".join(f"{100 * v:.0f}%" for v in share),
+        "",
+        "| Detector | AUROC [95% CI] | AUROC within position bins [95% CI] | AUPR [95% CI] "
+        "| Selected on calib | CHAIR_i after removal | Real objects kept |",
+        "|---|---|---|---|---|---|---|",
     ]
     for name, r in result["detectors"].items():
         sel = r["selection"] or {}
         sel_txt = ", ".join(f"{k}={v}" for k, v in sel.items() if k != "calib_auroc") or "–"
         rm = r["remove"]
         lines.append(
-            f"| {name} | {fmt_ci(r['auroc'], r['auroc_ci'])} | {fmt_ci(r['aupr'], r['aupr_ci'])} "
+            f"| {name} | {fmt_ci(r['auroc'], r['auroc_ci'])} | {fmt_ci(r['auroc_pos'], r['auroc_pos_ci'])} "
+            f"| {fmt_ci(r['aupr'], r['aupr_ci'])} "
             f"| {sel_txt} | {100 * rm['after']['CHAIR_i']:.1f} | {100 * rm['real_kept']:.1f}% |"
         )
     lines += ["", "Positive class = hallucinated object. All selections use the calibration "
-              "images only; numbers are on the held-out test images. CIs: bootstrap over images."]
+              "images only; numbers are on the held-out test images. CIs: bootstrap over images. "
+              "Position bins are quantiles of the object's token index on calibration mentions; "
+              "the within-bin AUROC is the size-weighted mean over bins."]
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -87,7 +96,7 @@ def plot_roc(table, eval_cfg, path: str):
                                        eval_cfg["split_seed"])
     calib = table.subset(np.array([i in calib_ids for i in table.image_ids]))
     test = table.subset(np.array([i in test_ids for i in table.image_ids]))
-    dets, _ = build_detectors(calib)
+    dets, _ = build_detectors(calib, eval_cfg.get("position_bins", 10))
 
     plt.figure(figsize=(6, 5))
     for name in ROC_DETECTORS:

@@ -9,6 +9,8 @@ Protocol (follows GLSim, NeurIPS 2025, with an explicit held-out split):
     (layers, statistic, sign, threshold) is made on calibration only and all
     reported numbers come from the test half
   - 95% CIs from a bootstrap over test images (mentions of one image move together)
+  - hallucinations concentrate late in long captions, so every detector is also
+    scored within caption-position deciles, next to a token-position baseline
 """
 
 import json
@@ -30,6 +32,7 @@ class MentionTable:
     image_ids: np.ndarray     # (N,) image of each mention
     labels: np.ndarray        # (N,) 1 = hallucinated
     classes: List[str]
+    positions: np.ndarray     # (N,) index of the object's first token in the caption
     nll: np.ndarray
     entropy: np.ndarray
     ic: np.ndarray            # (N, L+1)
@@ -43,7 +46,7 @@ class MentionTable:
         return MentionTable(
             self.image_ids[mask], self.labels[mask],
             [c for c, keep in zip(self.classes, mask) if keep],
-            self.nll[mask], self.entropy[mask], self.ic[mask],
+            self.positions[mask], self.nll[mask], self.entropy[mask], self.ic[mask],
             self.grid_at[mask], self.grid_pre[mask], self.stat_names,
             self.all_image_ids, self.n_dropped_nan,
         )
@@ -53,8 +56,8 @@ def load_run(run_dir: str, first_mention_only: bool = True) -> MentionTable:
     with open(os.path.join(run_dir, "run.json")) as f:
         stat_names = json.load(f)["stat_names"]
 
-    rows = {k: [] for k in ("image_ids", "labels", "classes", "nll", "entropy",
-                            "ic", "grid_at", "grid_pre")}
+    rows = {k: [] for k in ("image_ids", "labels", "classes", "positions", "nll",
+                            "entropy", "ic", "grid_at", "grid_pre")}
     all_ids = []
     with open(os.path.join(run_dir, "captions.jsonl")) as f:
         for line in f:
@@ -69,13 +72,14 @@ def load_run(run_dir: str, first_mention_only: bool = True) -> MentionTable:
                 rows["image_ids"].append(rec["image_id"])
                 rows["labels"].append(mentions[i]["label"])
                 rows["classes"].append(mentions[i]["canonical"])
+            rows["positions"].append(feats["token_index"][keep])
             for key in ("nll", "entropy", "ic", "grid_at", "grid_pre"):
                 rows[key].append(feats[key][keep])
 
     stack = lambda key: np.concatenate(rows[key]) if rows[key] else np.empty(0)
     table = MentionTable(
         np.array(rows["image_ids"]), np.array(rows["labels"]), rows["classes"],
-        stack("nll"), stack("entropy"), stack("ic"),
+        stack("positions"), stack("nll"), stack("entropy"), stack("ic"),
         stack("grid_at"), stack("grid_pre"), stat_names, np.array(sorted(set(all_ids))),
     )
     # A mention whose first token is the final generated token has no "at" state
@@ -107,6 +111,27 @@ def fast_auroc(labels: np.ndarray, scores: np.ndarray) -> np.ndarray:
     return auc.reshape(scores.shape[1:])
 
 
+def position_edges(positions: np.ndarray, n_bins: int) -> np.ndarray:
+    """Inner quantile edges of caption position (computed on calibration mentions)."""
+    return np.quantile(positions, np.linspace(0, 1, n_bins + 1)[1:-1])
+
+
+def stratified_auroc(labels: np.ndarray, scores: np.ndarray, strata: np.ndarray) -> np.ndarray:
+    """
+    AUROC within each stratum, averaged with stratum size as weight.
+    Strata that contain only one class are skipped. Works column-wise like fast_auroc.
+    """
+    total, weight = 0.0, 0
+    for k in np.unique(strata):
+        mask = strata == k
+        y = labels[mask]
+        if y.min() == y.max():
+            continue
+        total = total + mask.sum() * fast_auroc(y, scores[mask])
+        weight += mask.sum()
+    return total / weight if weight else np.full(scores.shape[1:], np.nan)
+
+
 def metrics(labels: np.ndarray, scores: np.ndarray) -> Dict[str, float]:
     if len(set(labels.tolist())) < 2:
         return {"auroc": float("nan"), "aupr": float("nan")}
@@ -114,12 +139,13 @@ def metrics(labels: np.ndarray, scores: np.ndarray) -> Dict[str, float]:
             "aupr": float(average_precision_score(labels, scores))}
 
 
-def bootstrap_ci(labels, scores, image_ids, n_boot: int, seed: int = 0):
-    """95% CI of AUROC and AUPR, resampling images."""
+def bootstrap_ci(labels, scores, image_ids, n_boot: int, seed: int = 0,
+                 strata: Optional[np.ndarray] = None):
+    """95% CI of AUROC and AUPR (and position-stratified AUROC), resampling images."""
     rng = np.random.default_rng(seed)
     uniq = np.unique(image_ids)
     groups = {i: np.flatnonzero(image_ids == i) for i in uniq}
-    aurocs, auprs = [], []
+    aurocs, auprs, strat = [], [], []
     for _ in range(n_boot):
         idx = np.concatenate([groups[i] for i in rng.choice(uniq, len(uniq))])
         y = labels[idx]
@@ -127,8 +153,13 @@ def bootstrap_ci(labels, scores, image_ids, n_boot: int, seed: int = 0):
             continue
         aurocs.append(roc_auc_score(y, scores[idx]))
         auprs.append(average_precision_score(y, scores[idx]))
+        if strata is not None:
+            strat.append(float(stratified_auroc(y, scores[idx], strata[idx])))
     ci = lambda v: [float(np.percentile(v, 2.5)), float(np.percentile(v, 97.5))] if v else [np.nan, np.nan]
-    return {"auroc_ci": ci(aurocs), "aupr_ci": ci(auprs)}
+    out = {"auroc_ci": ci(aurocs), "aupr_ci": ci(auprs)}
+    if strata is not None:
+        out["auroc_pos_ci"] = ci(strat)
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -146,11 +177,17 @@ def _derived_stats(grid: np.ndarray, names: List[str]) -> Tuple[np.ndarray, List
 
 
 def fit_grid_detector(calib: MentionTable, position: str, stats: List[str],
-                      diagonal_only: bool = False):
-    """Pick (text layer, image layer, statistic, sign) with the best calibration AUROC."""
+                      diagonal_only: bool = False, strata: Optional[np.ndarray] = None):
+    """
+    Pick (text layer, image layer, statistic, sign) with the best calibration AUROC.
+    With `strata`, the choice uses AUROC within caption-position bins instead.
+    """
     grid, names = _derived_stats(getattr(calib, f"grid_{position}"), calib.stat_names)
     cols = [names.index(s) for s in stats]
-    auc = fast_auroc(calib.labels, grid[..., cols])               # (Lt, Li, len(stats))
+    if strata is None:
+        auc = fast_auroc(calib.labels, grid[..., cols])           # (Lt, Li, len(stats))
+    else:
+        auc = stratified_auroc(calib.labels, grid[..., cols], strata)
     best_dir = np.maximum(auc, 1 - auc)
     if diagonal_only:
         mask = np.zeros_like(best_dir, dtype=bool)
@@ -159,7 +196,7 @@ def fit_grid_detector(calib: MentionTable, position: str, stats: List[str],
         best_dir = np.where(mask, best_dir, -1)
     lt, li, s = np.unravel_index(np.argmax(best_dir), best_dir.shape)
     sign = 1.0 if auc[lt, li, s] >= 0.5 else -1.0
-    choice = {"position": position, "text_layer": int(lt), "image_layer": int(li),
+    choice = {"state": position, "text_layer": int(lt), "image_layer": int(li),
               "stat": stats[s], "sign": "+" if sign > 0 else "-",
               "calib_auroc": float(best_dir[lt, li, s])}
     col = cols[s]
@@ -177,14 +214,32 @@ def fit_ic_detector(calib: MentionTable):
     return (lambda t: -t.ic[:, layer]), {"layer": layer, "calib_auroc": float(auc[layer])}
 
 
+def _position_basis(positions: np.ndarray) -> np.ndarray:
+    lp = np.log1p(positions.astype(np.float64))
+    return np.stack([np.ones_like(lp), lp, lp ** 2, lp ** 3], 1)
+
+
+def fit_position_correction(calib: MentionTable, base: Callable):
+    """
+    Subtract the score a real object is expected to get at the same caption position.
+    The trend (cubic in log(1 + position)) is fit on real calibration objects only.
+    """
+    real = calib.labels == 0
+    coef = np.linalg.lstsq(_position_basis(calib.positions[real]), base(calib)[real], rcond=None)[0]
+    return lambda t: base(t) - _position_basis(t.positions) @ coef
+
+
 def rank_average(*scores: np.ndarray) -> np.ndarray:
     return np.mean([rankdata(s) / len(s) for s in scores], axis=0)
 
 
-def build_detectors(calib: MentionTable) -> Tuple[Dict[str, Callable], Dict[str, dict]]:
+def build_detectors(calib: MentionTable, position_bins: int = 10
+                    ) -> Tuple[Dict[str, Callable], Dict[str, dict]]:
     dets, info = {}, {}
     dets["NLL"] = lambda t: t.nll
     dets["Entropy"] = lambda t: t.entropy
+    # Later objects in a caption are more often hallucinated; position alone is a baseline
+    dets["Token position"] = lambda t: t.positions.astype(np.float64)
     dets["Internal Confidence (max over layers)"] = lambda t: -t.ic.max(1)
     dets["Internal Confidence (calib layer)"], info["Internal Confidence (calib layer)"] = fit_ic_detector(calib)
 
@@ -201,6 +256,14 @@ def build_detectors(calib: MentionTable) -> Tuple[Dict[str, Callable], Dict[str,
         calib, "at", ["max", "top4", "top8", "top16", "top32", "global", "peak", "peak_top8"])
     dets["Best latent stat (pre)"], info["Best latent stat (pre)"] = fit_grid_detector(
         calib, "pre", ["max", "top4", "top8", "top16", "top32", "global", "peak", "peak_top8"])
+
+    # Position-controlled: layers and statistic chosen by within-position AUROC, then the
+    # expected similarity of a real object at that position is subtracted
+    strata = np.digitize(calib.positions, position_edges(calib.positions, position_bins))
+    within, info["Best latent stat, position-corrected"] = fit_grid_detector(
+        calib, "at", ["max", "top4", "top8", "top16", "top32", "global", "peak", "peak_top8"],
+        strata=strata)
+    dets["Best latent stat, position-corrected"] = fit_position_correction(calib, within)
 
     latent = dets["Best latent stat (at)"]
     dets["Fusion: NLL + best latent"] = lambda t: rank_average(t.nll, latent(t))
@@ -251,6 +314,7 @@ def evaluate_run(table: MentionTable, eval_cfg: dict) -> dict:
     calib = table.subset(np.array([i in calib_ids for i in table.image_ids]))
     test = table.subset(np.array([i in test_ids for i in table.image_ids]))
     test_images = np.array(sorted(test_ids))
+    n_bins = eval_cfg.get("position_bins", 10)
 
     summary = {
         "n_images": int(len(table.all_image_ids)),
@@ -266,12 +330,22 @@ def evaluate_run(table: MentionTable, eval_cfg: dict) -> dict:
         summary["error"] = "Need both real and hallucinated objects in calib and test splits"
         return {"summary": summary}
 
-    dets, info = build_detectors(calib)
+    edges = position_edges(calib.positions, n_bins)
+    test_strata = np.digitize(test.positions, edges)
+    summary["position_bins"] = {
+        "edges": edges.tolist(),
+        "test_hallucinated_share": [float(test.labels[test_strata == k].mean())
+                                    for k in range(n_bins) if (test_strata == k).any()],
+    }
+
+    dets, info = build_detectors(calib, n_bins)
     results = {}
     for name, fn in dets.items():
         s_test = fn(test)
         res = metrics(test.labels, s_test)
-        res.update(bootstrap_ci(test.labels, s_test, test.image_ids, eval_cfg["bootstrap"]))
+        res["auroc_pos"] = float(stratified_auroc(test.labels, s_test, test_strata))
+        res.update(bootstrap_ci(test.labels, s_test, test.image_ids, eval_cfg["bootstrap"],
+                                strata=test_strata))
         res["selection"] = info.get(name)
         res["remove"] = detect_then_remove(fn(calib), calib.labels, test, s_test,
                                            test_images, eval_cfg["keep_real"])

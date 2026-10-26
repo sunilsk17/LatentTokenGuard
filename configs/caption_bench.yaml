@@ -68,3 +68,4 @@ evaluation:
   bootstrap: 1000          # resamples (over images) for 95% confidence intervals
   first_mention_only: true # score each object class once per caption, as GLSim does
   keep_real: 0.95          # detect-then-remove: threshold keeps this share of real objects (on calib)
+  position_bins: 10        # caption-position quantile bins (from calib) for position-controlled AUROC

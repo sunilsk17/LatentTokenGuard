@@ -1,0 +1,33 @@
+{
+  "model_key": "llava15_7b_4bit",
+  "model": {
+    "model_id": "llava-hf/llava-1.5-7b-hf",
+    "device": "cuda",
+    "dtype": "torch.float16",
+    "load_in_4bit": true,
+    "transformers": "5.20.2",
+    "torch": "2.11.0+cu130",
+    "num_layers": 32
+  },
+  "prompt": "Please describe this image in detail.",
+  "prompt_template": "USER: <image>\n{prompt} ASSISTANT:",
+  "max_new_tokens": 512,
+  "n_images": 1000,
+  "seed": 42,
+  "stat_names": [
+    "max",
+    "top4",
+    "top8",
+    "top16",
+    "top32",
+    "mean",
+    "std",
+    "global"
+  ],
+  "git_commit": "b31187899bcf224634298e1a9fe8cb362a41c3e0",
+  "data": {
+    "images_dir": "/tmp/coco/val2017",
+    "instances_file": "/tmp/coco/annotations/instances_val2017.json",
+    "captions_file": "/tmp/coco/annotations/captions_val2017.json"
+  }
+}

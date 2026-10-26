@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from caption_bench.capture import token_at_char
 from caption_bench.chair import ChairExtractor, CocoGroundTruth, singularize
-from caption_bench.evaluate import evaluate_run, fast_auroc, load_run
+from caption_bench.evaluate import evaluate_run, fast_auroc, load_run, stratified_auroc
 from sklearn.metrics import roc_auc_score
 
 
@@ -96,9 +96,24 @@ def test_fast_auroc_matches_sklearn():
             assert fast[i, j] == pytest.approx(roc_auc_score(y, s[:, i, j]))
 
 
-def _fake_run(path, n_images=60, layers=4, seed=0):
-    """A run where layer pair (2, 1) 'max' separates hallucinations."""
+def test_stratified_auroc():
+    labels = np.array([0, 1, 0, 1, 0, 0, 1, 1])
+    scores = np.array([0, 1, 1, 0, 5, 6, 7, 8], dtype=float)
+    strata = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    expected = (4 * roc_auc_score(labels[:4], scores[:4]) + 4 * 1.0) / 8
+    assert float(stratified_auroc(labels, scores, strata)) == pytest.approx(expected)
+    # a stratum with one class only is skipped
+    strata_one = np.array([0, 0, 0, 0, 1, 1, 2, 2])
+    assert float(stratified_auroc(labels, scores, strata_one)) == pytest.approx(roc_auc_score(labels[:4], scores[:4]))
+
+
+def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False):
+    """
+    A run where layer pair (2, 1) 'max' separates hallucinations. With position_only,
+    labels and that feature both follow the caption position and nothing else.
+    """
     rng = np.random.default_rng(seed)
+    pos_rng = np.random.default_rng(seed + 1)
     stat_names = ["max", "top4", "top8", "top16", "top32", "mean", "std", "global"]
     os.makedirs(path / "feats")
     (path / "run.json").write_text(json.dumps({"stat_names": stat_names,
@@ -106,15 +121,16 @@ def _fake_run(path, n_images=60, layers=4, seed=0):
     with open(path / "captions.jsonl", "w") as f:
         for img in range(n_images):
             m = int(rng.integers(0, 5))
-            labels = rng.integers(0, 2, m)
+            positions = pos_rng.integers(0, 100, m)
+            labels = (rng.random(m) < positions / 100) if position_only else rng.integers(0, 2, m)
             mentions = [{"canonical": "dog", "label": int(l), "first": True} for l in labels]
             f.write(json.dumps({"image_id": img, "caption": "", "mentions": mentions}) + "\n")
             if m == 0:
                 continue
             grid = rng.uniform(0.2, 0.4, (m, layers, layers, len(stat_names)))
             grid[..., 6] = 0.05
-            grid[:, 2, 1, 0] -= 0.3 * labels
-            np.savez(path / "feats" / f"{img}.npz",
+            grid[:, 2, 1, 0] -= 0.01 * positions if position_only else 0.3 * labels
+            np.savez(path / "feats" / f"{img}.npz", token_index=positions.astype(np.int32),
                      nll=rng.normal(size=m).astype(np.float32),
                      entropy=rng.normal(size=m).astype(np.float32),
                      ic=rng.uniform(size=(m, layers)).astype(np.float32),
@@ -132,3 +148,18 @@ def test_evaluate_run_finds_planted_layer(tmp_path):
     assert 0.3 < res["detectors"]["NLL"]["auroc"] < 0.7
     rm = res["detectors"]["Max-patch cosine, layer pair"]["remove"]
     assert rm["after"]["CHAIR_i"] < rm["before"]["CHAIR_i"]
+    # the planted signal does not depend on position, so the controls keep it
+    assert res["detectors"]["Max-patch cosine, layer pair"]["auroc_pos"] > 0.85
+    assert res["detectors"]["Best latent stat, position-corrected"]["auroc"] > 0.85
+    assert 0.3 < res["detectors"]["Token position"]["auroc"] < 0.7
+
+
+def test_position_controls_remove_a_pure_position_signal(tmp_path):
+    _fake_run(tmp_path, n_images=400, position_only=True)
+    cfg = {"calib_fraction": 0.5, "split_seed": 0, "bootstrap": 20, "keep_real": 0.95,
+           "position_bins": 10}
+    res = evaluate_run(load_run(str(tmp_path)), cfg)["detectors"]
+    assert res["Token position"]["auroc"] > 0.75
+    assert res["Max-patch cosine, layer pair"]["auroc"] > 0.75
+    assert abs(res["Max-patch cosine, layer pair"]["auroc_pos"] - 0.5) < 0.1
+    assert abs(res["Best latent stat, position-corrected"]["auroc"] - 0.5) < 0.1
