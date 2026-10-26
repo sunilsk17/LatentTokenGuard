@@ -14,7 +14,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from caption_bench.capture import token_at_char
 from caption_bench.chair import ChairExtractor, CocoGroundTruth, singularize
-from caption_bench.evaluate import evaluate_run, fast_auroc, load_run, stratified_auroc
+from caption_bench.evaluate import (crossfit_evaluate, crossfit_scores, evaluate_run, fast_auroc,
+                                    load_run, stratified_auroc)
 from sklearn.metrics import roc_auc_score
 
 
@@ -163,3 +164,33 @@ def test_position_controls_remove_a_pure_position_signal(tmp_path):
     assert res["Max-patch cosine, layer pair"]["auroc"] > 0.75
     assert abs(res["Max-patch cosine, layer pair"]["auroc_pos"] - 0.5) < 0.1
     assert abs(res["Best latent stat, position-corrected"]["auroc"] - 0.5) < 0.1
+
+
+CV_CFG = {"calib_fraction": 0.5, "split_seed": 0, "bootstrap": 50, "keep_real": 0.95,
+          "position_bins": 5, "cv_folds": 4}
+
+
+def test_crossfit_scores_every_mention_once(tmp_path):
+    _fake_run(tmp_path, n_images=80)
+    table = load_run(str(tmp_path))
+    scores, strata, selections = crossfit_scores(table, folds=4, seed=0, position_bins=5)
+    s = scores["Max-patch cosine, layer pair"]
+    assert s.shape == table.labels.shape and np.all((s >= 0) & (s <= 1))
+    assert len(selections["Max-patch cosine, layer pair"]) == 4
+    assert set(np.unique(strata)) <= set(range(5))
+
+
+def test_crossfit_finds_planted_signal_and_compares(tmp_path):
+    _fake_run(tmp_path, n_images=120)
+    cv = crossfit_evaluate(load_run(str(tmp_path)), CV_CFG)
+    assert cv["detectors"]["Best latent stat (at)"]["auroc"] > 0.9
+    nll = next(c for c in cv["comparisons"] if c["baseline"] == "NLL")
+    assert nll["overall"]["diff"] > 0.2 and nll["overall"]["p_le_0"] == 0.0
+    assert nll["within_position"]["ci"][0] > 0
+
+
+def test_crossfit_position_only_signal_vanishes_within_bins(tmp_path):
+    _fake_run(tmp_path, n_images=400, position_only=True)
+    cv = crossfit_evaluate(load_run(str(tmp_path)), {**CV_CFG, "position_bins": 10})
+    assert cv["detectors"]["Best latent stat (at)"]["auroc"] > 0.75
+    assert abs(cv["detectors"]["Best latent stat (at)"]["auroc_pos"] - 0.5) < 0.1

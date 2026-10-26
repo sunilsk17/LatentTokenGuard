@@ -1727,12 +1727,717 @@
     "CHAIR_i": 0.25674019607843135,
     "CHAIR_s": 0.468
   },
+  "crossfit": {
+    "folds": 5,
+    "n_mentions": 3281,
+    "n_hallucinated": 837,
+    "detectors": {
+      "NLL": {
+        "auroc": 0.734995072417859,
+        "aupr": 0.49331705392140035,
+        "auroc_pos": 0.7085200673337229,
+        "auroc_ci": [
+          0.7159500948482085,
+          0.7538232841196446
+        ],
+        "aupr_ci": [
+          0.4580473952696778,
+          0.5337643449972337
+        ],
+        "auroc_pos_ci": [
+          0.6793033144651883,
+          0.7374430118245714
+        ],
+        "selections": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "Entropy": {
+        "auroc": 0.7407710492816876,
+        "aupr": 0.471410919023111,
+        "auroc_pos": 0.6955429536026095,
+        "auroc_ci": [
+          0.7217433797309746,
+          0.7601292838099931
+        ],
+        "aupr_ci": [
+          0.43504528863935576,
+          0.5094313164328018
+        ],
+        "auroc_pos_ci": [
+          0.6551497225756447,
+          0.7312830262653605
+        ],
+        "selections": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "Token position": {
+        "auroc": 0.8369077857753219,
+        "aupr": 0.5560939792530093,
+        "auroc_pos": 0.4735833161317427,
+        "auroc_ci": [
+          0.8225261621956297,
+          0.8501776199292485
+        ],
+        "aupr_ci": [
+          0.5171246402261134,
+          0.5964168490450511
+        ],
+        "auroc_pos_ci": [
+          0.44260749590910065,
+          0.5108754787910693
+        ],
+        "selections": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "Internal Confidence (max over layers)": {
+        "auroc": 0.76861482146314,
+        "aupr": 0.5446604959218299,
+        "auroc_pos": 0.6787208562604047,
+        "auroc_ci": [
+          0.7493961885178522,
+          0.7869177935529557
+        ],
+        "aupr_ci": [
+          0.5052849236347264,
+          0.5844455324863018
+        ],
+        "auroc_pos_ci": [
+          0.6358643538408425,
+          0.7180863263978828
+        ],
+        "selections": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "Internal Confidence (calib layer)": {
+        "auroc": 0.7946356815608702,
+        "aupr": 0.5784957112709587,
+        "auroc_pos": 0.7083805332043923,
+        "auroc_ci": [
+          0.7751845233002138,
+          0.8117757043040977
+        ],
+        "aupr_ci": [
+          0.5381727765710264,
+          0.6149303259943152
+        ],
+        "auroc_pos_ci": [
+          0.678722627906481,
+          0.7404753237104325
+        ],
+        "selections": [
+          {
+            "layer": 32,
+            "calib_auroc": 0.7949874686716792
+          },
+          {
+            "layer": 32,
+            "calib_auroc": 0.7892074809039489
+          },
+          {
+            "layer": 32,
+            "calib_auroc": 0.7865060198229291
+          },
+          {
+            "layer": 32,
+            "calib_auroc": 0.7986796518757515
+          },
+          {
+            "layer": 32,
+            "calib_auroc": 0.8037196554731827
+          }
+        ]
+      },
+      "Max-patch cosine, same layer (LTG/ContextualLens)": {
+        "auroc": 0.8760478444761217,
+        "aupr": 0.7085532288303761,
+        "auroc_pos": 0.7799471053811173,
+        "auroc_ci": [
+          0.8621888374412878,
+          0.8886628232868633
+        ],
+        "aupr_ci": [
+          0.6730180678892247,
+          0.7414519668157601
+        ],
+        "auroc_pos_ci": [
+          0.7382116397178144,
+          0.8138553913703261
+        ],
+        "selections": [
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8750270170839944
+          },
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8734486695883845
+          },
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8795850354928205
+          },
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8761020263593394
+          },
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8750638863133731
+          }
+        ]
+      },
+      "Max-patch cosine, layer pair": {
+        "auroc": 0.8723506913280421,
+        "aupr": 0.6867441138288863,
+        "auroc_pos": 0.7730359519537856,
+        "auroc_ci": [
+          0.8587109150171105,
+          0.8855824649745367
+        ],
+        "aupr_ci": [
+          0.6506627520913721,
+          0.721705032599715
+        ],
+        "auroc_pos_ci": [
+          0.7301097622883552,
+          0.8077466573815377
+        ],
+        "selections": [
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8750270170839944
+          },
+          {
+            "state": "at",
+            "text_layer": 19,
+            "image_layer": 26,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8736619575006878
+          },
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8795850354928205
+          },
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 25,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8761020263593394
+          },
+          {
+            "state": "at",
+            "text_layer": 24,
+            "image_layer": 26,
+            "stat": "max",
+            "sign": "-",
+            "calib_auroc": 0.8752735040789105
+          }
+        ]
+      },
+      "Top-k mean cosine": {
+        "auroc": 0.8910750146165383,
+        "aupr": 0.7060302018186554,
+        "auroc_pos": 0.7966757526558238,
+        "auroc_ci": [
+          0.8787415818908513,
+          0.9027384434442288
+        ],
+        "aupr_ci": [
+          0.669057121288944,
+          0.7436695078016136
+        ],
+        "auroc_pos_ci": [
+          0.7615138218186621,
+          0.82762259266489
+        ],
+        "selections": [
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 26,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8930897580342293
+          },
+          {
+            "state": "at",
+            "text_layer": 19,
+            "image_layer": 23,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8938451740783588
+          },
+          {
+            "state": "at",
+            "text_layer": 21,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8975172760513292
+          },
+          {
+            "state": "at",
+            "text_layer": 21,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8941169204576572
+          },
+          {
+            "state": "at",
+            "text_layer": 21,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8977921047115323
+          }
+        ]
+      },
+      "Global cosine": {
+        "auroc": 0.7844229253803723,
+        "aupr": 0.5127588782236108,
+        "auroc_pos": 0.6237891763885413,
+        "auroc_ci": [
+          0.7687506311900955,
+          0.8013314207578175
+        ],
+        "aupr_ci": [
+          0.4766930471812681,
+          0.5528103089922913
+        ],
+        "auroc_pos_ci": [
+          0.5752999296696242,
+          0.6762209964156741
+        ],
+        "selections": [
+          {
+            "state": "at",
+            "text_layer": 20,
+            "image_layer": 21,
+            "stat": "global",
+            "sign": "-",
+            "calib_auroc": 0.7872080813654933
+          },
+          {
+            "state": "at",
+            "text_layer": 20,
+            "image_layer": 22,
+            "stat": "global",
+            "sign": "-",
+            "calib_auroc": 0.782524710874292
+          },
+          {
+            "state": "at",
+            "text_layer": 20,
+            "image_layer": 21,
+            "stat": "global",
+            "sign": "-",
+            "calib_auroc": 0.788222058753225
+          },
+          {
+            "state": "at",
+            "text_layer": 20,
+            "image_layer": 22,
+            "stat": "global",
+            "sign": "-",
+            "calib_auroc": 0.7806625254485493
+          },
+          {
+            "state": "at",
+            "text_layer": 20,
+            "image_layer": 22,
+            "stat": "global",
+            "sign": "-",
+            "calib_auroc": 0.7865777112723327
+          }
+        ]
+      },
+      "Peakedness": {
+        "auroc": 0.7706643143328114,
+        "aupr": 0.5564326996072179,
+        "auroc_pos": 0.6550146054101067,
+        "auroc_ci": [
+          0.7532742107711291,
+          0.7890798110163174
+        ],
+        "aupr_ci": [
+          0.5207352028345704,
+          0.5967818963736674
+        ],
+        "auroc_pos_ci": [
+          0.603653767409215,
+          0.6972033924446359
+        ],
+        "selections": [
+          {
+            "state": "at",
+            "text_layer": 31,
+            "image_layer": 29,
+            "stat": "peak_top8",
+            "sign": "-",
+            "calib_auroc": 0.7809792064258505
+          },
+          {
+            "state": "at",
+            "text_layer": 31,
+            "image_layer": 29,
+            "stat": "peak_top8",
+            "sign": "-",
+            "calib_auroc": 0.7672569139575459
+          },
+          {
+            "state": "at",
+            "text_layer": 31,
+            "image_layer": 29,
+            "stat": "peak_top8",
+            "sign": "-",
+            "calib_auroc": 0.7694262083982968
+          },
+          {
+            "state": "at",
+            "text_layer": 31,
+            "image_layer": 26,
+            "stat": "peak_top8",
+            "sign": "-",
+            "calib_auroc": 0.7715717381210339
+          },
+          {
+            "state": "at",
+            "text_layer": 31,
+            "image_layer": 29,
+            "stat": "peak_top8",
+            "sign": "-",
+            "calib_auroc": 0.7763943703105876
+          }
+        ]
+      },
+      "Best latent stat (at)": {
+        "auroc": 0.8910750146165383,
+        "aupr": 0.7060302018186554,
+        "auroc_pos": 0.7966757526558238,
+        "auroc_ci": [
+          0.8787415818908513,
+          0.9027384434442288
+        ],
+        "aupr_ci": [
+          0.669057121288944,
+          0.7436695078016136
+        ],
+        "auroc_pos_ci": [
+          0.7615138218186621,
+          0.82762259266489
+        ],
+        "selections": [
+          {
+            "state": "at",
+            "text_layer": 25,
+            "image_layer": 26,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8930897580342293
+          },
+          {
+            "state": "at",
+            "text_layer": 19,
+            "image_layer": 23,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8938451740783588
+          },
+          {
+            "state": "at",
+            "text_layer": 21,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8975172760513292
+          },
+          {
+            "state": "at",
+            "text_layer": 21,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8941169204576572
+          },
+          {
+            "state": "at",
+            "text_layer": 21,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8977921047115323
+          }
+        ]
+      },
+      "Best latent stat (pre)": {
+        "auroc": 0.7880462625658233,
+        "aupr": 0.5136052356417844,
+        "auroc_pos": 0.5568878078809207,
+        "auroc_ci": [
+          0.7716596073900499,
+          0.8046737491756442
+        ],
+        "aupr_ci": [
+          0.4782737507304655,
+          0.5523618557654077
+        ],
+        "auroc_pos_ci": [
+          0.507028016906438,
+          0.5991929155330802
+        ],
+        "selections": [
+          {
+            "state": "pre",
+            "text_layer": 32,
+            "image_layer": 20,
+            "stat": "top32",
+            "sign": "-",
+            "calib_auroc": 0.7993492906578372
+          },
+          {
+            "state": "pre",
+            "text_layer": 31,
+            "image_layer": 22,
+            "stat": "top16",
+            "sign": "-",
+            "calib_auroc": 0.79500092324273
+          },
+          {
+            "state": "pre",
+            "text_layer": 32,
+            "image_layer": 20,
+            "stat": "top32",
+            "sign": "-",
+            "calib_auroc": 0.8016026130364983
+          },
+          {
+            "state": "pre",
+            "text_layer": 26,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.7913844010810425
+          },
+          {
+            "state": "pre",
+            "text_layer": 31,
+            "image_layer": 22,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8009235743047873
+          }
+        ]
+      },
+      "Best latent stat, position-corrected": {
+        "auroc": 0.7811527804664387,
+        "aupr": 0.47982735517704983,
+        "auroc_pos": 0.7967436717928927,
+        "auroc_ci": [
+          0.7648527579993021,
+          0.7984577949000798
+        ],
+        "aupr_ci": [
+          0.4487671654927177,
+          0.5161304591625236
+        ],
+        "auroc_pos_ci": [
+          0.7544465158224533,
+          0.830062476765251
+        ],
+        "selections": [
+          {
+            "state": "at",
+            "text_layer": 22,
+            "image_layer": 23,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.7900458992700435
+          },
+          {
+            "state": "at",
+            "text_layer": 22,
+            "image_layer": 23,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.7995896963644922
+          },
+          {
+            "state": "at",
+            "text_layer": 22,
+            "image_layer": 23,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8112730609442758
+          },
+          {
+            "state": "at",
+            "text_layer": 22,
+            "image_layer": 23,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.7979204781415518
+          },
+          {
+            "state": "at",
+            "text_layer": 19,
+            "image_layer": 23,
+            "stat": "top8",
+            "sign": "-",
+            "calib_auroc": 0.8061922239901751
+          }
+        ]
+      },
+      "Fusion: NLL + best latent": {
+        "auroc": 0.8724914793892145,
+        "aupr": 0.7055929098549192,
+        "auroc_pos": 0.8008777490210351,
+        "auroc_ci": [
+          0.8587142737774056,
+          0.8848954981599058
+        ],
+        "aupr_ci": [
+          0.6726147572582529,
+          0.7382380631015235
+        ],
+        "auroc_pos_ci": [
+          0.7726324400492881,
+          0.8245059735268316
+        ],
+        "selections": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      },
+      "Fusion: NLL + IC + best latent": {
+        "auroc": 0.8874372564317656,
+        "aupr": 0.7330472770765932,
+        "auroc_pos": 0.8200754313238039,
+        "auroc_ci": [
+          0.8733749528991095,
+          0.9001182536686394
+        ],
+        "aupr_ci": [
+          0.6972138118509427,
+          0.7682174518372161
+        ],
+        "auroc_pos_ci": [
+          0.792374071018789,
+          0.8426362094390165
+        ],
+        "selections": [
+          null,
+          null,
+          null,
+          null,
+          null
+        ]
+      }
+    },
+    "comparisons": [
+      {
+        "detector": "Best latent stat (at)",
+        "baseline": "NLL",
+        "overall": {
+          "diff": 0.15607994219867927,
+          "ci": [
+            0.13783877199382466,
+            0.1763565942659497
+          ],
+          "p_le_0": 0.0
+        },
+        "within_position": {
+          "diff": 0.08815568532210094,
+          "ci": [
+            0.04608321559089966,
+            0.12795795227196974
+          ],
+          "p_le_0": 0.0
+        }
+      },
+      {
+        "detector": "Best latent stat (at)",
+        "baseline": "Internal Confidence (calib layer)",
+        "overall": {
+          "diff": 0.09643933305566799,
+          "ci": [
+            0.08045589898070732,
+            0.11395881197322774
+          ],
+          "p_le_0": 0.0
+        },
+        "within_position": {
+          "diff": 0.08829521945143148,
+          "ci": [
+            0.04330826491301008,
+            0.13101190417592298
+          ],
+          "p_le_0": 0.0
+        }
+      }
+    ]
+  },
   "config": {
     "calib_fraction": 0.5,
     "split_seed": 0,
     "bootstrap": 1000,
     "first_mention_only": true,
     "keep_real": 0.95,
-    "position_bins": 10
+    "position_bins": 10,
+    "cv_folds": 5
   }
 }

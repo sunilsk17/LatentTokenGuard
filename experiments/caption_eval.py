@@ -4,7 +4,7 @@ Evaluate object-level hallucination detectors on a caption run.
 
 Writes to <run>/eval/:
   eval.json         all numbers (test split), selections made on calibration
-  eval.md           the results table for the paper
+  eval.md           the results tables for the paper (held-out split, then cross-fitted)
   layer_map.png     calibration AUROC of max-patch cosine per (text, image) layer
   roc_test.png      ROC curves of the main detectors on the test split
 
@@ -17,13 +17,15 @@ import json
 import logging
 import os
 import sys
+from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import yaml
 
-from caption_bench.evaluate import build_detectors, evaluate_run, load_run, split_images
+from caption_bench.evaluate import (build_detectors, crossfit_evaluate, evaluate_run, load_run,
+                                    split_images)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -36,6 +38,51 @@ ROC_DETECTORS = ["NLL", "Token position", "Internal Confidence (calib layer)",
 
 def fmt_ci(value, ci):
     return f"{100 * value:.1f} [{100 * ci[0]:.1f}, {100 * ci[1]:.1f}]"
+
+
+def fmt_selections(selections: list) -> str:
+    """Compact per-fold selections, e.g. "L21/L22 top8 (4/5), L22/L22 top8 (1/5)"."""
+    if not selections or selections[0] is None:
+        return "–"
+    def one(sel):
+        if "layer" in sel:
+            return f"L{sel['layer']}"
+        return f"{sel['state']} L{sel['text_layer']}/L{sel['image_layer']} {sel['stat']} ({sel['sign']})"
+    counts = Counter(one(s) for s in selections)
+    return ", ".join(f"{k} ({v}/{len(selections)})" for k, v in counts.most_common())
+
+
+def crossfit_markdown(cv: dict) -> list:
+    lines = [
+        "",
+        f"## Cross-fitted ({cv['folds']} folds over images)",
+        "",
+        f"Every image is scored once by detectors fit on the other folds. "
+        f"Mentions: {cv['n_mentions']} ({cv['n_hallucinated']} hallucinated).",
+        "",
+        "| Detector | AUROC [95% CI] | AUROC within position bins [95% CI] | AUPR [95% CI] | Selected per fold |",
+        "|---|---|---|---|---|",
+    ]
+    for name, r in cv["detectors"].items():
+        lines.append(
+            f"| {name} | {fmt_ci(r['auroc'], r['auroc_ci'])} | {fmt_ci(r['auroc_pos'], r['auroc_pos_ci'])} "
+            f"| {fmt_ci(r['aupr'], r['aupr_ci'])} | {fmt_selections(r['selections'])} |"
+        )
+    lines += [
+        "",
+        "Paired differences (bootstrap over images; p = share of resamples with difference ≤ 0):",
+        "",
+        "| Comparison | ΔAUROC [95% CI] | p | ΔAUROC within position bins [95% CI] | p |",
+        "|---|---|---|---|---|",
+    ]
+    for c in cv["comparisons"]:
+        o, w = c["overall"], c["within_position"]
+        lines.append(
+            f"| {c['detector']} − {c['baseline']} | {100 * o['diff']:+.1f} "
+            f"[{100 * o['ci'][0]:+.1f}, {100 * o['ci'][1]:+.1f}] | {o['p_le_0']:.3f} "
+            f"| {100 * w['diff']:+.1f} [{100 * w['ci'][0]:+.1f}, {100 * w['ci'][1]:+.1f}] | {w['p_le_0']:.3f} |"
+        )
+    return lines
 
 
 def write_markdown(result: dict, run_info: dict, path: str):
@@ -71,6 +118,8 @@ def write_markdown(result: dict, run_info: dict, path: str):
               "images only; numbers are on the held-out test images. CIs: bootstrap over images. "
               "Position bins are quantiles of the object's token index on calibration mentions; "
               "the within-bin AUROC is the size-weighted mean over bins."]
+    if "crossfit" in result:
+        lines += crossfit_markdown(result["crossfit"])
     with open(path, "w") as f:
         f.write("\n".join(lines) + "\n")
 
@@ -128,6 +177,8 @@ def main():
     first_only = eval_cfg["first_mention_only"] and not args.all_mentions
     table = load_run(args.run, first_mention_only=first_only)
     result = evaluate_run(table, eval_cfg)
+    if eval_cfg.get("cv_folds", 0) > 1 and "error" not in result["summary"]:
+        result["crossfit"] = crossfit_evaluate(table, eval_cfg)
     result["config"] = {**eval_cfg, "first_mention_only": first_only}
 
     out = os.path.join(args.run, "eval")

@@ -32,6 +32,7 @@ LLaVA-1.5-7B needs about 14 GB in fp16, and 4-bit loading requires CUDA. Evaluat
    - Test-set AUROC and AUPR are reported, with 95% bootstrap intervals over images. The positive class is a hallucinated object.
    - Objects named late in a long caption are hallucinated far more often than early ones (Zhou et al., ICLR 2024), and hidden-state similarity also drifts with position. Every detector is therefore also scored within caption-position bins: deciles of the object's token index, with edges set on calibration. The reported value is the size-weighted mean AUROC over bins.
    - Detect-then-remove: CHAIR_i and CHAIR_s are reported before and after removing flagged objects, at a threshold that keeps 95% of real calibration objects.
+   - Cross-fitting (`cv_folds`, default 5) repeats the procedure over folds of images, so every image is scored once as test data. Each fold's scores are converted to percentiles of the fitting folds' scores before pooling. Detectors are compared with a paired bootstrap over images, both overall and within position bins.
 
 Each run folder contains:
 - `run.json`: model, precision, library versions, git commit

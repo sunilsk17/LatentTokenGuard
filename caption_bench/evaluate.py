@@ -11,6 +11,8 @@ Protocol (follows GLSim, NeurIPS 2025, with an explicit held-out split):
   - 95% CIs from a bootstrap over test images (mentions of one image move together)
   - hallucinations concentrate late in long captions, so every detector is also
     scored within caption-position deciles, next to a token-position baseline
+  - a cross-fitted variant (k folds over images) scores every image once as
+    test data and compares detectors with a paired bootstrap
 """
 
 import json
@@ -358,3 +360,100 @@ def evaluate_run(table: MentionTable, eval_cfg: dict) -> dict:
     return {"summary": summary, "detectors": results,
             "calib_layer_map_max_cosine": layer_map.tolist(),
             "chair_test": chair_scores(test.labels, test.image_ids, test_images)}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Cross-fitted evaluation
+# ──────────────────────────────────────────────────────────────────────────────
+
+# (detector, baseline) pairs compared with a paired bootstrap
+PAIRED_COMPARISONS = [
+    ("Best latent stat (at)", "NLL"),
+    ("Best latent stat (at)", "Internal Confidence (calib layer)"),
+]
+
+
+def _percentile_of(reference: np.ndarray, scores: np.ndarray) -> np.ndarray:
+    """Mid-rank percentile of each score among the reference scores."""
+    ref = np.sort(reference)
+    return (np.searchsorted(ref, scores, "left") + np.searchsorted(ref, scores, "right")) / (2 * len(ref))
+
+
+def crossfit_scores(table: MentionTable, folds: int, seed: int, position_bins: int):
+    """
+    Out-of-fold scores: images are split into `folds` folds; detectors are fit on the
+    other folds and score the held-out one, so every mention is scored exactly once.
+    Each fold's scores are mapped to percentiles of the fitting folds' scores, which
+    keeps folds comparable when they select different layers or statistics.
+    Position bins are also set on the fitting folds.
+    """
+    rng = np.random.default_rng(seed)
+    ids = np.array(sorted(set(table.all_image_ids.tolist())))
+    rng.shuffle(ids)
+    fold_of = {i: f for f, chunk in enumerate(np.array_split(ids, folds)) for i in chunk.tolist()}
+    fold = np.array([fold_of[i] for i in table.image_ids.tolist()])
+
+    scores: Dict[str, np.ndarray] = {}
+    selections: Dict[str, list] = {}
+    strata = np.zeros(len(table.labels), int)
+    for f in range(folds):
+        fit, held = table.subset(fold != f), table.subset(fold == f)
+        dets, info = build_detectors(fit, position_bins)
+        strata[fold == f] = np.digitize(held.positions, position_edges(fit.positions, position_bins))
+        for name, fn in dets.items():
+            scores.setdefault(name, np.zeros(len(table.labels)))[fold == f] = \
+                _percentile_of(fn(fit), fn(held))
+            selections.setdefault(name, []).append(info.get(name))
+    return scores, strata, selections
+
+
+def paired_bootstrap(labels, scores_a, scores_b, image_ids, strata, n_boot: int, seed: int = 0):
+    """AUROC(a) - AUROC(b), overall and within position bins, resampling images."""
+    rng = np.random.default_rng(seed)
+    uniq = np.unique(image_ids)
+    groups = {i: np.flatnonzero(image_ids == i) for i in uniq}
+    both = np.stack([scores_a, scores_b], 1)
+    diffs, diffs_pos = [], []
+    for _ in range(n_boot):
+        idx = np.concatenate([groups[i] for i in rng.choice(uniq, len(uniq))])
+        y = labels[idx]
+        if y.min() == y.max():
+            continue
+        a, b = fast_auroc(y, both[idx])
+        diffs.append(a - b)
+        a, b = stratified_auroc(y, both[idx], strata[idx])
+        diffs_pos.append(a - b)
+
+    def summarize(point, v):
+        v = np.array(v)
+        return {"diff": float(point),
+                "ci": [float(np.percentile(v, 2.5)), float(np.percentile(v, 97.5))],
+                "p_le_0": float(np.mean(v <= 0))}
+    point = fast_auroc(labels, both)
+    point_pos = stratified_auroc(labels, both, strata)
+    return {"overall": summarize(point[0] - point[1], diffs),
+            "within_position": summarize(point_pos[0] - point_pos[1], diffs_pos)}
+
+
+def crossfit_evaluate(table: MentionTable, eval_cfg: dict) -> dict:
+    folds = eval_cfg["cv_folds"]
+    scores, strata, selections = crossfit_scores(
+        table, folds, eval_cfg["split_seed"], eval_cfg.get("position_bins", 10))
+
+    results = {}
+    for name, s in scores.items():
+        res = metrics(table.labels, s)
+        res["auroc_pos"] = float(stratified_auroc(table.labels, s, strata))
+        res.update(bootstrap_ci(table.labels, s, table.image_ids, eval_cfg["bootstrap"],
+                                strata=strata))
+        res["selections"] = selections[name]
+        results[name] = res
+
+    comparisons = []
+    for a, b in PAIRED_COMPARISONS:
+        comparisons.append({"detector": a, "baseline": b,
+                            **paired_bootstrap(table.labels, scores[a], scores[b],
+                                               table.image_ids, strata, eval_cfg["bootstrap"])})
+    return {"folds": folds, "n_mentions": int(len(table.labels)),
+            "n_hallucinated": int(table.labels.sum()),
+            "detectors": results, "comparisons": comparisons}
