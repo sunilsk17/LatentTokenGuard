@@ -54,3 +54,4 @@ Paired differences (bootstrap over images; p = share of resamples with differenc
 |---|---|---|---|---|
 | Best latent stat (at) − NLL | +16.8 [+14.6, +19.2] | 0.000 | +5.3 [-0.9, +10.8] | 0.059 |
 | Best latent stat (at) − Internal Confidence (calib layer) | +11.2 [+9.5, +13.1] | 0.000 | +8.5 [+1.9, +16.0] | 0.004 |
+| Fusion: NLL + best latent − NLL | +14.6 [+13.2, +15.9] | 0.000 | +8.5 [+6.1, +10.7] | 0.000 |

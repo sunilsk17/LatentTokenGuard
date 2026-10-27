@@ -366,10 +366,12 @@ def evaluate_run(table: MentionTable, eval_cfg: dict) -> dict:
 # Cross-fitted evaluation
 # ──────────────────────────────────────────────────────────────────────────────
 
-# (detector, baseline) pairs compared with a paired bootstrap
+# (detector, baseline) pairs compared with a paired bootstrap. The fusion row asks
+# whether the latent score adds information to NLL, not whether it replaces it.
 PAIRED_COMPARISONS = [
     ("Best latent stat (at)", "NLL"),
     ("Best latent stat (at)", "Internal Confidence (calib layer)"),
+    ("Fusion: NLL + best latent", "NLL"),
 ]
 
 

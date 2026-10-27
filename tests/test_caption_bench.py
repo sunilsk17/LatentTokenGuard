@@ -184,9 +184,12 @@ def test_crossfit_finds_planted_signal_and_compares(tmp_path):
     _fake_run(tmp_path, n_images=120)
     cv = crossfit_evaluate(load_run(str(tmp_path)), CV_CFG)
     assert cv["detectors"]["Best latent stat (at)"]["auroc"] > 0.9
-    nll = next(c for c in cv["comparisons"] if c["baseline"] == "NLL")
+    pairs = {(c["detector"], c["baseline"]): c for c in cv["comparisons"]}
+    nll = pairs["Best latent stat (at)", "NLL"]
     assert nll["overall"]["diff"] > 0.2 and nll["overall"]["p_le_0"] == 0.0
     assert nll["within_position"]["ci"][0] > 0
+    fused = pairs["Fusion: NLL + best latent", "NLL"]
+    assert fused["overall"]["diff"] > 0 and fused["within_position"]["ci"][0] > 0
 
 
 def test_crossfit_position_only_signal_vanishes_within_bins(tmp_path):
