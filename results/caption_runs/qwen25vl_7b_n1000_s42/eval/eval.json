@@ -570,6 +570,43 @@
         "hallucinated_removed": 0.29381443298969073
       }
     },
+    "GLSim (settings chosen on calibration)": {
+      "auroc": 0.8175731166484701,
+      "aupr": 0.4462682560521645,
+      "auroc_pos": 0.7079225856422994,
+      "auroc_ci": [
+        0.7903460027677306,
+        0.8455218141351625
+      ],
+      "aupr_ci": [
+        0.3819086287289187,
+        0.5156846414193459
+      ],
+      "auroc_pos_ci": [
+        0.6443111139271355,
+        0.7744121425840834
+      ],
+      "selection": {
+        "image_layer": 3,
+        "object_layer": 20,
+        "K": 4,
+        "w": 0.8,
+        "calib_auroc": 0.8129776224255508
+      },
+      "remove": {
+        "threshold": -0.3549688830971718,
+        "before": {
+          "CHAIR_i": 0.15384615384615385,
+          "CHAIR_s": 0.302
+        },
+        "after": {
+          "CHAIR_i": 0.1234991423670669,
+          "CHAIR_s": 0.24
+        },
+        "real_kept": 0.9578256794751641,
+        "hallucinated_removed": 0.25773195876288657
+      }
+    },
     "Linear probe on hidden states": {
       "auroc": 0.9419704538208098,
       "aupr": 0.7600939686909679,
@@ -2171,6 +2208,60 @@
           null
         ]
       },
+      "GLSim (settings chosen on calibration)": {
+        "auroc": 0.8113958113958114,
+        "aupr": 0.44127871272532115,
+        "auroc_pos": 0.6948830451452754,
+        "auroc_ci": [
+          0.7924605607044085,
+          0.8309977664448046
+        ],
+        "aupr_ci": [
+          0.3980863515697452,
+          0.490152350620892
+        ],
+        "auroc_pos_ci": [
+          0.6447198211384408,
+          0.7441326869132152
+        ],
+        "selections": [
+          {
+            "image_layer": 3,
+            "object_layer": 20,
+            "K": 8,
+            "w": 0.8,
+            "calib_auroc": 0.8171891907594211
+          },
+          {
+            "image_layer": 3,
+            "object_layer": 20,
+            "K": 16,
+            "w": 0.8,
+            "calib_auroc": 0.8162980217616617
+          },
+          {
+            "image_layer": 3,
+            "object_layer": 20,
+            "K": 16,
+            "w": 0.8,
+            "calib_auroc": 0.8160928807546561
+          },
+          {
+            "image_layer": 3,
+            "object_layer": 20,
+            "K": 4,
+            "w": 0.8,
+            "calib_auroc": 0.817738751616636
+          },
+          {
+            "image_layer": 4,
+            "object_layer": 20,
+            "K": 8,
+            "w": 0.8,
+            "calib_auroc": 0.8155483580746739
+          }
+        ]
+      },
       "Linear probe on hidden states": {
         "auroc": 0.9459351546730188,
         "aupr": 0.7744220986740111,
@@ -2295,6 +2386,26 @@
             -0.05930718913178969
           ],
           "p_le_0": 1.0
+        }
+      },
+      {
+        "detector": "Best latent stat (at)",
+        "baseline": "GLSim (settings chosen on calibration)",
+        "overall": {
+          "diff": 0.06279952881894624,
+          "ci": [
+            0.04679917222231827,
+            0.07787739034542512
+          ],
+          "p_le_0": 0.0
+        },
+        "within_position": {
+          "diff": 0.13344345920018197,
+          "ci": [
+            0.0976024061668316,
+            0.16701826181200435
+          ],
+          "p_le_0": 0.0
         }
       }
     ]

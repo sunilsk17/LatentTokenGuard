@@ -570,6 +570,79 @@
         "hallucinated_removed": 0.5168539325842697
       }
     },
+    "GLSim (published settings)": {
+      "auroc": 0.7550501538917936,
+      "aupr": 0.5146118499875088,
+      "auroc_pos": 0.5775702244450366,
+      "auroc_ci": [
+        0.7260379484842909,
+        0.7801705566289951
+      ],
+      "aupr_ci": [
+        0.4484053830200829,
+        0.5727383489625585
+      ],
+      "auroc_pos_ci": [
+        0.5051784086452428,
+        0.6291708869789683
+      ],
+      "selection": {
+        "image_layer": 40,
+        "object_layer": 38,
+        "K": 32,
+        "w": 0.6
+      },
+      "remove": {
+        "threshold": -0.040679915994405756,
+        "before": {
+          "CHAIR_i": 0.22704081632653061,
+          "CHAIR_s": 0.454
+        },
+        "after": {
+          "CHAIR_i": 0.18233618233618235,
+          "CHAIR_s": 0.372
+        },
+        "real_kept": 0.9471947194719472,
+        "hallucinated_removed": 0.2808988764044944
+      }
+    },
+    "GLSim (settings chosen on calibration)": {
+      "auroc": 0.8662856454184745,
+      "aupr": 0.643717422422833,
+      "auroc_pos": 0.705177884258954,
+      "auroc_ci": [
+        0.8436102884452051,
+        0.8858940954055646
+      ],
+      "aupr_ci": [
+        0.5843283737498831,
+        0.6995021553641247
+      ],
+      "auroc_pos_ci": [
+        0.6285868541378227,
+        0.7641434813378544
+      ],
+      "selection": {
+        "image_layer": 37,
+        "object_layer": 40,
+        "K": 32,
+        "w": 0.5,
+        "calib_auroc": 0.8785689152223016
+      },
+      "remove": {
+        "threshold": -0.04823903702199459,
+        "before": {
+          "CHAIR_i": 0.22704081632653061,
+          "CHAIR_s": 0.454
+        },
+        "after": {
+          "CHAIR_i": 0.16906474820143885,
+          "CHAIR_s": 0.354
+        },
+        "real_kept": 0.9529702970297029,
+        "hallucinated_removed": 0.3398876404494382
+      }
+    },
     "Linear probe on hidden states": {
       "auroc": 0.9186111729150443,
       "aupr": 0.7261109037269143,
@@ -3035,6 +3108,109 @@
           null
         ]
       },
+      "GLSim (published settings)": {
+        "auroc": 0.7679155517613259,
+        "aupr": 0.5264385488652383,
+        "auroc_pos": 0.5969224148740411,
+        "auroc_ci": [
+          0.7495919346908194,
+          0.7876993963312588
+        ],
+        "aupr_ci": [
+          0.4877191431300436,
+          0.5669270577552221
+        ],
+        "auroc_pos_ci": [
+          0.542269592520609,
+          0.6471470200139231
+        ],
+        "selections": [
+          {
+            "image_layer": 40,
+            "object_layer": 38,
+            "K": 32,
+            "w": 0.6
+          },
+          {
+            "image_layer": 40,
+            "object_layer": 38,
+            "K": 32,
+            "w": 0.6
+          },
+          {
+            "image_layer": 40,
+            "object_layer": 38,
+            "K": 32,
+            "w": 0.6
+          },
+          {
+            "image_layer": 40,
+            "object_layer": 38,
+            "K": 32,
+            "w": 0.6
+          },
+          {
+            "image_layer": 40,
+            "object_layer": 38,
+            "K": 32,
+            "w": 0.6
+          }
+        ]
+      },
+      "GLSim (settings chosen on calibration)": {
+        "auroc": 0.8688564582904523,
+        "aupr": 0.6501002071882515,
+        "auroc_pos": 0.7089971062779035,
+        "auroc_ci": [
+          0.8530257216316424,
+          0.8840759571119422
+        ],
+        "aupr_ci": [
+          0.6127512533704799,
+          0.6892579444865843
+        ],
+        "auroc_pos_ci": [
+          0.6594577109488827,
+          0.7548913286121094
+        ],
+        "selections": [
+          {
+            "image_layer": 36,
+            "object_layer": 40,
+            "K": 32,
+            "w": 0.5,
+            "calib_auroc": 0.8702198778109506
+          },
+          {
+            "image_layer": 37,
+            "object_layer": 40,
+            "K": 32,
+            "w": 0.5,
+            "calib_auroc": 0.8777343035161866
+          },
+          {
+            "image_layer": 37,
+            "object_layer": 40,
+            "K": 32,
+            "w": 0.5,
+            "calib_auroc": 0.8646924398985959
+          },
+          {
+            "image_layer": 37,
+            "object_layer": 40,
+            "K": 32,
+            "w": 0.5,
+            "calib_auroc": 0.8681951211114363
+          },
+          {
+            "image_layer": 36,
+            "object_layer": 40,
+            "K": 16,
+            "w": 0.5,
+            "calib_auroc": 0.8820200975857503
+          }
+        ]
+      },
       "Linear probe on hidden states": {
         "auroc": 0.9247349310760595,
         "aupr": 0.7517065166965508,
@@ -3159,6 +3335,46 @@
             0.012830922565306125
           ],
           "p_le_0": 0.926
+        }
+      },
+      {
+        "detector": "Best latent stat (at)",
+        "baseline": "GLSim (settings chosen on calibration)",
+        "overall": {
+          "diff": 0.02252161344456871,
+          "ci": [
+            0.011835868837122952,
+            0.033211763234853794
+          ],
+          "p_le_0": 0.0
+        },
+        "within_position": {
+          "diff": 0.07805012690588198,
+          "ci": [
+            0.039410125380328946,
+            0.11588334696747203
+          ],
+          "p_le_0": 0.0
+        }
+      },
+      {
+        "detector": "Best latent stat (at)",
+        "baseline": "GLSim (published settings)",
+        "overall": {
+          "diff": 0.12346251997369517,
+          "ci": [
+            0.10514289963791039,
+            0.14178396357812786
+          ],
+          "p_le_0": 0.0
+        },
+        "within_position": {
+          "diff": 0.19012481830974437,
+          "ci": [
+            0.09859218521167637,
+            0.2604732527545338
+          ],
+          "p_le_0": 0.0
         }
       }
     ]

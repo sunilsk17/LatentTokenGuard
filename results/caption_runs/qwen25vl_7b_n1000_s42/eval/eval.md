@@ -25,6 +25,7 @@ Hallucinated share by caption-position bin, earliest to latest (10 bins): 0%, 2%
 | Best latent stat, position-corrected | 83.2 [80.1, 86.2] | 83.2 [78.2, 87.0] | 47.1 [39.9, 54.3] | state=at, text_layer=17, image_layer=13, stat=top4, sign=- | 12.0 | 95.4% |
 | Fusion: NLL + best latent | 82.4 [79.3, 85.3] | 78.1 [74.1, 81.5] | 47.1 [39.3, 55.6] | – | 10.9 | 94.6% |
 | Fusion: NLL + IC + best latent | 81.0 [77.9, 83.8] | 74.5 [70.5, 78.6] | 45.0 [37.3, 52.9] | – | 12.0 | 94.2% |
+| GLSim (settings chosen on calibration) | 81.8 [79.0, 84.6] | 70.8 [64.4, 77.4] | 44.6 [38.2, 51.6] | image_layer=3, object_layer=20, K=4, w=0.8 | 12.3 | 95.8% |
 | Linear probe on hidden states | 94.2 [92.7, 95.6] | 91.6 [88.7, 94.0] | 76.0 [69.5, 81.2] | layer=15, C=0.001, inner_auroc=0.9375705639563937 | 3.5 | 90.2% |
 
 Positive class = hallucinated object. All selections use the calibration images only; numbers are on the held-out test images. CIs: bootstrap over images. Position bins are quantiles of the object's token index on calibration mentions; the within-bin AUROC is the size-weighted mean over bins.
@@ -50,6 +51,7 @@ Every image is scored once by detectors fit on the other folds. Mentions: 2570 (
 | Best latent stat, position-corrected | 82.6 [80.6, 84.5] | 83.5 [80.7, 86.3] | 45.8 [41.3, 51.0] | at L17/L13 top8 (-) (3/5), at L16/L13 top8 (-) (1/5), at L17/L13 top4 (-) (1/5) |
 | Fusion: NLL + best latent | 81.7 [79.7, 83.7] | 76.0 [72.4, 79.0] | 47.6 [42.3, 52.8] | – |
 | Fusion: NLL + IC + best latent | 81.0 [78.8, 83.1] | 72.8 [68.9, 76.7] | 47.0 [42.2, 52.1] | – |
+| GLSim (settings chosen on calibration) | 81.1 [79.2, 83.1] | 69.5 [64.5, 74.4] | 44.1 [39.8, 49.0] | L20/L3 K=16 w=0.8 (2/5), L20/L3 K=8 w=0.8 (1/5), L20/L3 K=4 w=0.8 (1/5), L20/L4 K=8 w=0.8 (1/5) |
 | Linear probe on hidden states | 94.6 [93.7, 95.5] | 91.8 [89.6, 93.5] | 77.4 [73.6, 81.3] | L16 C=0.001 (4/5), L17 C=0.001 (1/5) |
 
 Paired differences (bootstrap over images; p = share of resamples with difference ≤ 0):
@@ -60,3 +62,4 @@ Paired differences (bootstrap over images; p = share of resamples with differenc
 | Best latent stat (at) − Internal Confidence (calib layer) | +19.3 [+16.5, +21.9] | 0.000 | +24.9 [+18.8, +30.3] | 0.000 |
 | Fusion: NLL + best latent − NLL | +16.3 [+14.5, +18.1] | 0.000 | +15.8 [+11.7, +20.3] | 0.000 |
 | Best latent stat (at) − Linear probe on hidden states | -7.2 [-8.5, -5.8] | 1.000 | -8.9 [-11.9, -5.9] | 1.000 |
+| Best latent stat (at) − GLSim (settings chosen on calibration) | +6.3 [+4.7, +7.8] | 0.000 | +13.3 [+9.8, +16.7] | 0.000 |

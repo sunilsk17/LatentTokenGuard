@@ -81,13 +81,14 @@ PAIRS = [  # (detector, baseline, row label)
     ("Best latent stat (at)", "NLL", "Latent − NLL"),
     ("Best latent stat (at)", "Internal Confidence (calib layer)", "Latent − Internal Confidence"),
     ("Fusion: NLL + best latent", "NLL", "(NLL + latent) − NLL"),
+    ("Best latent stat (at)", "GLSim (settings chosen on calibration)", "Latent − GLSim"),
     ("Best latent stat (at)", "Linear probe on hidden states", "Latent − linear probe"),
 ]
 
 
 def fig_paired(out):
     """Paired bootstrap differences within position bins, one row per comparison."""
-    fig, ax = plt.subplots(figsize=(3.4, 2.3))
+    fig, ax = plt.subplots(figsize=(3.4, 2.7))
     offsets = [-0.22, 0.0, 0.22]
     for (name, run, _), color, marker, dy in zip(RUNS, COLORS, MARKERS, offsets):
         cv = json.load(open(os.path.join(run, "eval", "eval.json")))["crossfit"]

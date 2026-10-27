@@ -96,6 +96,13 @@ def run_numbers(key, run):
     out["dec1"] = f"{100 * lab[bins == 0].mean():.0f}"
     out["dec10"] = f"{100 * lab[bins == 9].mean():.0f}"
 
+    # AUROC lost from overall to within position bins
+    for short in ("lat", "ic", "nll", "glsim", "glsimpub"):
+        name = DETECTORS[short]
+        if name not in e["crossfit"]["detectors"]:
+            continue
+        c = e["crossfit"]["detectors"][name]
+        out[f"cv-{short}-drop"] = f"{100 * (c['auroc'] - c['auroc_pos']):.1f}"
     for short, name in DETECTORS.items():
         if name not in e["detectors"]:
             continue
@@ -104,7 +111,8 @@ def run_numbers(key, run):
             f"cv-{short}-auc": pct(c["auroc"]), f"cv-{short}-auclo": pct(c["auroc_ci"][0]),
             f"cv-{short}-auchi": pct(c["auroc_ci"][1]), f"cv-{short}-pos": pct(c["auroc_pos"]),
             f"cv-{short}-poslo": pct(c["auroc_pos_ci"][0]), f"cv-{short}-poshi": pct(c["auroc_pos_ci"][1]),
-            f"cv-{short}-aupr": pct(c["aupr"]),
+            f"cv-{short}-aupr": pct(c["aupr"]), f"cv-{short}-auprlo": pct(c["aupr_ci"][0]),
+            f"cv-{short}-auprhi": pct(c["aupr_ci"][1]),
             f"ho-{short}-auc": pct(h["auroc"]), f"ho-{short}-pos": pct(h["auroc_pos"]),
             f"ho-{short}-aupr": pct(h["aupr"]),
             f"ho-{short}-rmib": pct(h["remove"]["before"]["CHAIR_i"]),
@@ -122,14 +130,38 @@ def run_numbers(key, run):
             f"cmp-{k}-hi": signed(o["ci"][1]), f"cmp-{k}-p": pval(o["p_le_0"]),
             f"cmp-{k}-wd": signed(w["diff"]), f"cmp-{k}-wlo": signed(w["ci"][0]),
             f"cmp-{k}-whi": signed(w["ci"][1]), f"cmp-{k}-wp": pval(w["p_le_0"]),
+            f"cmp-{k}-wabs": f"{100 * abs(w['diff']):.1f}",
         })
     # Layers chosen by the latent statistic across the held-out split and the 5 folds
     sel = e["crossfit"]["detectors"]["Best latent stat (at)"]["selections"] + \
         [e["detectors"]["Best latent stat (at)"]["selection"]]
     t, i = [x["text_layer"] for x in sel], [x["image_layer"] for x in sel]
+    stats = sorted({x["stat"] for x in sel}, key=lambda n: int(n[3:]) if n.startswith("top") else 0)
+    out["latstats"] = ", ".join(f"$k={n[3:]}$" if n.startswith("top") else n for n in stats)
     out.update({"laytxt": f"{min(t)}--{max(t)}", "layimg": f"{min(i)}--{max(i)}",
                 "nlayers": str(json.load(open(f"{d}/run.json"))["model"]["num_layers"])})
+    # Choices made on the fitting data in each fold (f1..f5) and on the held-out split (ho)
+    def sel_text(name, sel):
+        if sel is None:
+            return "--"
+        if "C" in sel:
+            return f"{sel['layer']}, $10^{{{int(round(np.log10(sel['C'])))}}}$"
+        if "w" in sel:
+            return f"{sel['object_layer']}/{sel['image_layer']}, {sel['K']}, {sel['w']:g}"
+        if "layer" in sel:
+            return str(sel["layer"])
+        stat = sel["stat"].replace("top", "top-")
+        return f"{sel['text_layer']}/{sel['image_layer']}, {stat}"
+    for short in ("lat", "maxsame", "ic", "probe", "glsim"):
+        name = DETECTORS[short]
+        if name not in e["detectors"]:
+            continue
+        for f, sel in enumerate(e["crossfit"]["detectors"][name]["selections"], 1):
+            out[f"sel-{short}-f{f}"] = sel_text(name, sel)
+        out[f"sel-{short}-ho"] = sel_text(name, e["detectors"][name]["selection"])
     if "hidden_check" in s:
+        out["hidmax"] = f"{s['hidden_check']['max_abs_diff']:.3f}"
+        out["hidshare"] = f"{100 * s['hidden_check']['share_above_0.01']:.1f}"
         mant, exp = f"{s['hidden_check']['median_abs_diff']:.0e}".split("e")
         out["hidmed"] = f"${mant}\\times10^{{{int(exp)}}}$"
     le = f"results/paper/label_efficiency_{LE_KEYS[key]}.json"
@@ -151,9 +183,18 @@ def pope_numbers():
         out.update({
             f"pope-{key}-auc": pct(roc_auc_score(absent, s)),
             f"pope-{key}-answer": pct(roc_auc_score(absent, (~yes).astype(int))),
-            f"pope-{key}-nhal": str(int(hall.sum())), f"pope-{key}-nyes": str(int(yes.sum())),
+            f"pope-{key}-nhal": f"{int(hall.sum()):,}", f"pope-{key}-nyes": f"{int(yes.sum()):,}",
             f"pope-{key}-halauc": pct(roc_auc_score(hall[yes], s[yes])),
+            # how much the score follows the model's own answer
+            f"pope-{key}-ansauc": pct(roc_auc_score((~yes).astype(int), s)),
+            f"pope-{key}-noauc": pct(roc_auc_score(absent[~yes], s[~yes])),
+            f"pope-{key}-nno": f"{int((~yes).sum()):,}",
         })
+        for a_name, a_val in (("present", 0), ("absent", 1)):
+            for y_name, y_val in (("yes", True), ("no", False)):
+                m = (absent == a_val) & (yes == y_val)
+                out[f"pope-{key}-n-{a_name}-{y_name}"] = f"{int(m.sum()):,}"
+                out[f"pope-{key}-mean-{a_name}-{y_name}"] = f"{s[m].mean():.3f}"
     return out
 
 
