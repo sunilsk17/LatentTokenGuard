@@ -56,4 +56,3 @@ python main.py \
     --mode alignment_only
 ```
 
-*Verified and finalized: March 29, 2026*
