@@ -4,6 +4,8 @@ Images: 1000 (calib 500, test 500). Object mentions: 3281 (837 hallucinated). Te
 
 CHAIR on test captions: CHAIR_i 25.7, CHAIR_s 46.8
 
+Hidden states for the linear probe were re-read from the stored captions; their same-layer max cosine differs from the one recorded at generation by 1.8e-04 (median), 7.7e-02 (max).
+
 Hallucinated share by caption-position bin, earliest to latest (10 bins): 2%, 1%, 5%, 7%, 14%, 26%, 36%, 55%, 49%, 63%
 
 | Detector | AUROC [95% CI] | AUROC within position bins [95% CI] | AUPR [95% CI] | Selected on calib | CHAIR_i after removal | Real objects kept |
@@ -23,6 +25,7 @@ Hallucinated share by caption-position bin, earliest to latest (10 bins): 2%, 1%
 | Best latent stat, position-corrected | 78.0 [75.2, 80.6] | 79.2 [74.2, 84.0] | 50.3 [45.1, 55.3] | state=at, text_layer=22, image_layer=22, stat=top8, sign=- | 22.9 | 94.8% |
 | Fusion: NLL + best latent | 87.4 [85.4, 89.2] | 80.7 [77.1, 83.7] | 70.3 [65.5, 75.2] | – | 15.4 | 93.6% |
 | Fusion: NLL + IC + best latent | 88.4 [86.4, 90.3] | 83.3 [79.8, 85.8] | 72.0 [67.0, 76.9] | – | 14.6 | 94.5% |
+| Linear probe on hidden states | 91.2 [89.9, 92.5] | 83.2 [79.3, 86.9] | 77.1 [73.4, 80.8] | layer=15, C=0.001, inner_auroc=0.923570003044346 | 9.8 | 88.5% |
 
 Positive class = hallucinated object. All selections use the calibration images only; numbers are on the held-out test images. CIs: bootstrap over images. Position bins are quantiles of the object's token index on calibration mentions; the within-bin AUROC is the size-weighted mean over bins.
 
@@ -47,6 +50,7 @@ Every image is scored once by detectors fit on the other folds. Mentions: 3281 (
 | Best latent stat, position-corrected | 78.1 [76.5, 79.8] | 79.7 [75.4, 83.0] | 48.0 [44.9, 51.6] | at L22/L23 top8 (-) (4/5), at L19/L23 top8 (-) (1/5) |
 | Fusion: NLL + best latent | 87.2 [85.9, 88.5] | 80.1 [77.3, 82.5] | 70.6 [67.3, 73.8] | – |
 | Fusion: NLL + IC + best latent | 88.7 [87.3, 90.0] | 82.0 [79.2, 84.3] | 73.3 [69.7, 76.8] | – |
+| Linear probe on hidden states | 92.1 [91.2, 92.9] | 86.0 [83.7, 87.9] | 78.5 [75.6, 81.0] | L16 C=0.001 (3/5), L15 C=0.001 (1/5), L18 C=0.01 (1/5) |
 
 Paired differences (bootstrap over images; p = share of resamples with difference ≤ 0):
 
@@ -55,3 +59,4 @@ Paired differences (bootstrap over images; p = share of resamples with differenc
 | Best latent stat (at) − NLL | +15.6 [+13.8, +17.6] | 0.000 | +8.8 [+4.6, +12.8] | 0.000 |
 | Best latent stat (at) − Internal Confidence (calib layer) | +9.6 [+8.0, +11.4] | 0.000 | +8.8 [+4.3, +13.1] | 0.000 |
 | Fusion: NLL + best latent − NLL | +13.7 [+12.7, +15.0] | 0.000 | +9.2 [+7.3, +11.2] | 0.000 |
+| Best latent stat (at) − Linear probe on hidden states | -3.0 [-4.1, -2.0] | 1.000 | -6.3 [-9.5, -3.4] | 1.000 |
