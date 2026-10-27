@@ -1,6 +1,6 @@
 """
 data/mmhal_loader.py
-Module 6b: MMHal-Bench Dataset Loader
+MMHal-Bench dataset loader
 
 MMHal-Bench (Multimodal Hallucination Benchmark)
   Paper: "Aligning Large Multimodal Models with Factually Augmented RLHF" (Sun et al., 2023)

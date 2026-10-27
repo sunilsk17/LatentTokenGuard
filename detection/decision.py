@@ -1,6 +1,6 @@
 """
 detection/decision.py
-Module 5: Decision Layer
+Decision layer
 
 Converts a hallucination score ∈ [0, 1] into a binary label.
 

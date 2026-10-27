@@ -1,6 +1,6 @@
 """
 evaluation/metrics.py
-Module 7: Evaluation Engine
+Evaluation metrics
 
 Computes:
   - Accuracy

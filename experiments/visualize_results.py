@@ -49,7 +49,7 @@ def plot_combined_roc(llava_res, phi_res, save_path="results/roc_comparison.png"
     plt.legend(loc="lower right", frameon=True)
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
-    print(f"✅ Generated ROC Curve: {save_path}")
+    print(f"Saved ROC curve: {save_path}")
 
 def plot_f1_threshold(llava_res, phi_res, save_path="results/f1_v_threshold.png"):
     plt.figure(figsize=(8, 6))
@@ -75,7 +75,7 @@ def plot_f1_threshold(llava_res, phi_res, save_path="results/f1_v_threshold.png"
     plt.legend(loc="lower left", frameon=True)
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
-    print(f"✅ Generated F1 Curve: {save_path}")
+    print(f"Saved F1 curve: {save_path}")
 
 def main():
     # Use the Downloads directory the user suggested, or fallback to current results
@@ -92,7 +92,7 @@ def main():
         llava_res = load_data("results/pope_adversarial_llava_alignment_only.json")
 
     if phi_res[0] is None and llava_res[0] is None:
-        print("❌ No result files found. Run the benchmark first!")
+        print("No result files found. Run the benchmark first.")
         return
 
     # Ensure results folder exists locally

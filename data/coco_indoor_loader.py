@@ -1,6 +1,6 @@
 """
 data/coco_indoor_loader.py
-Module 6c: COCO Indoor Subset Loader — Novel Dataset Contribution ⭐
+COCO Indoor subset loader
 
 This is one of the paper's original contributions.
 

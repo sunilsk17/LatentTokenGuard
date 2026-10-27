@@ -50,10 +50,10 @@ def analyze(json_path):
     print(f"\n=======================================================")
     print(f"  Final Results for {model_name.upper()} ({samples} samples)")
     print(f"=======================================================")
-    print(f"  🎯 Optimal Threshold: {best_t:.3f}")
-    print(f"  📈 Best F1 Score:     {best_f1:.4f}  <-- Final Paper Value")
-    print(f"  ✅ Accuracy:          {best_acc:.4f}")
-    print(f"  📊 AUROC:             {auroc:.4f}")
+    print(f"  Optimal threshold: {best_t:.3f}")
+    print(f"  Best F1:           {best_f1:.4f}")
+    print(f"  Accuracy:          {best_acc:.4f}")
+    print(f"  AUROC:             {auroc:.4f}")
     print(f"=======================================================\n")
 
 if __name__ == "__main__":

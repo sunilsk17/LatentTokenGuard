@@ -7,7 +7,7 @@ sys.path.append(os.getcwd())
 if os.path.exists("LatentTokenGuard"): sys.path.append(os.path.abspath("LatentTokenGuard"))
 from data.pope_loader import POPELoader
 
-def generate_impactful_pdf_figures(config_path="config.yaml"):
+def generate_qualitative_figures(config_path="config.yaml"):
     if not os.path.exists(config_path): config_path = os.path.join("LatentTokenGuard", "config.yaml")
     with open(config_path, "r") as f: config = yaml.safe_load(f)
     
@@ -86,7 +86,7 @@ def generate_impactful_pdf_figures(config_path="config.yaml"):
     # Changed output to .png
     plt.savefig("results/case_study_kitchen.png", bbox_inches='tight', dpi=300)
     plt.close()
-    print("✅ Created: Impactful Gallery and Case Study (Kitchen Probe) PNGs with Ground Truth.")
+    print("Saved the qualitative gallery and the kitchen case study (PNG) with ground truth.")
 
 if __name__ == "__main__":
-    generate_impactful_pdf_figures()
+    generate_qualitative_figures()

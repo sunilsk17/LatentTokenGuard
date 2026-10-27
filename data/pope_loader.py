@@ -1,6 +1,6 @@
 """
 data/pope_loader.py
-Module 6a: POPE Dataset Loader
+POPE dataset loader
 
 POPE (Polling-based Object Probing Evaluation)
   Paper: "Evaluating Object Hallucination in Large Vision-Language Models" (Li et al., 2023)

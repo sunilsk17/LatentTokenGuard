@@ -1,6 +1,6 @@
 """
 detection/token_extractor.py
-Module 2: Content Token Extractor
+Content token extractor
 
 Purpose:
   Filter the LVLM-generated tokens to keep only content-bearing tokens

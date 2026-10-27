@@ -48,7 +48,7 @@ def plot_distribution(json_path, save_path="results/score_distribution.png"):
     plt.legend(loc="upper right", frameon=True)
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
-    print(f"✅ Generated KDE Distribution Plot: {save_path}")
+    print(f"Saved KDE distribution plot: {save_path}")
 
 if __name__ == "__main__":
     # Use the LLaVA local JSON data

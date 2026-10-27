@@ -1,6 +1,6 @@
 """
 detection/logit_contrast.py
-Module 4: Logit Contrast Engine (Optional — doubles inference time)
+Logit Contrast Engine (optional; doubles inference time)
 
 Intuition:
   If a model says "there is a microwave" but the image shows no microwave,

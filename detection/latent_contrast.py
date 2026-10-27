@@ -1,6 +1,6 @@
 """
 detection/latent_contrast.py
-Module 3: Latent Contrast Engine — CORE CONTRIBUTION ⭐
+Latent Contrast Engine
 
 This is the central novelty of the paper.
 

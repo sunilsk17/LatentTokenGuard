@@ -45,32 +45,32 @@ def main():
     # Check if already downloaded
     all_present = all((TARGET_DIR / f).exists() for f in TARGET_FILES)
     if all_present:
-        print("✅ COCO annotations already present.")
+        print("COCO annotations already present.")
         for f in TARGET_FILES:
             size = (TARGET_DIR / f).stat().st_size / 1e6
             print(f"   {f}: {size:.1f} MB")
         return
 
-    print(f"📥 Downloading COCO annotations from:\n   {ANNOTATIONS_URL}\n")
+    print(f"Downloading COCO annotations from:\n   {ANNOTATIONS_URL}\n")
     zip_path = download_file(
         ANNOTATIONS_URL,
         TARGET_DIR / "annotations",
         desc="COCO Annotations",
     )
 
-    print("\n📦 Extracting selected annotation files...")
+    print("\nExtracting selected annotation files...")
     with zipfile.ZipFile(zip_path, "r") as zf:
         for target_file in TARGET_FILES:
             member = f"annotations/{target_file}"
             if member in zf.namelist():
                 zf.extract(member, TARGET_DIR.parent)
-                print(f"   ✅ Extracted: {target_file}")
+                print(f"   Extracted: {target_file}")
             else:
-                print(f"   ⚠️  Not found in zip: {member}")
+                print(f"   Not found in zip: {member}")
 
     # Clean up zip
     zip_path.unlink()
-    print(f"\n✅ Done! Annotations saved to: {TARGET_DIR}")
+    print(f"\nDone. Annotations saved to: {TARGET_DIR}")
 
 
 if __name__ == "__main__":

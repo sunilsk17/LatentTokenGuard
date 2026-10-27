@@ -45,10 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BANNER = """
-╔══════════════════════════════════════════════════════════╗
-║          LatentTokenGuard 🛡️  v1.0                       ║
-║     Hallucination Detection for Vision-Language Models   ║
-╚══════════════════════════════════════════════════════════╝
+LatentTokenGuard v1.0: hallucination detection for vision-language models
 """
 
 
@@ -103,10 +100,10 @@ def run_pipeline(args):
     os.makedirs(config["experiments"]["cache_dir"], exist_ok=True)
 
     # ── Init model & modules ─────────────────────────────────────────────────
-    logger.info(f"🔧 Model:   {args.model}")
-    logger.info(f"🗂️  Dataset: {args.dataset} [{args.split}]")
-    logger.info(f"⚙️  Mode:    {args.mode}")
-    logger.info(f"📊 Samples: {args.n_samples or 'all'}")
+    logger.info(f"Model:   {args.model}")
+    logger.info(f"Dataset: {args.dataset} [{args.split}]")
+    logger.info(f"Mode:    {args.mode}")
+    logger.info(f"Samples: {args.n_samples or 'all'}")
 
     model           = load_model(args.model, config)
     extractor       = TokenExtractor(use_pos_filter=config["detection"]["use_token_filter"])
@@ -134,7 +131,7 @@ def run_pipeline(args):
 
     sample_iter = dataset.iter_samples(**iter_kwargs)
 
-    logger.info("\n🚀 Starting inference pipeline...\n")
+    logger.info("\nStarting inference pipeline...\n")
 
     for sample in tqdm(sample_iter, desc="Processing"):
         t_start = time.time()
@@ -199,7 +196,7 @@ def run_pipeline(args):
 
         if args.verbose:
             correct = (label == "Hallucinated") == gt_is_hall
-            icon = "✅" if correct else "❌"
+            icon = "ok   " if correct else "WRONG"
             print(
                 f" {icon} Q: {sample.get('question','')[:60]}\n"
                 f"    Answer: '{answer[:50]}' | Score: {final_score:.3f} | {label}"
@@ -233,7 +230,7 @@ def run_pipeline(args):
     )
     with open(out_path, "w") as f:
         json.dump({"metadata": result.to_dict(), "predictions": predictions_log}, f, indent=2)
-    logger.info(f"💾 Results saved to: {out_path}")
+    logger.info(f"Results saved to: {out_path}")
 
     model.unload()
     return result

@@ -69,4 +69,4 @@ Each run folder contains:
 - 4-bit (T4) and fp16 (A100) runs produce different hidden states. Compare detectors only within one run.
 - Decoding is greedy. Qwen2.5-VL runs use its default `repetition_penalty` of 1.05 (`generate_kwargs` in the config, recorded in `run.json`). NLL, entropy and Internal Confidence use the raw logits, before any penalty.
 - `feature_seconds` in `captions.jsonl` times every layer pair plus Internal Confidence. A deployed detector computes a single layer pair, so its overhead should be timed separately against `gen_seconds`.
-- Feature and hidden-state arrays are excluded from git (`.gitignore`). Publish them with the release that accompanies the paper.
+- Feature and hidden-state arrays are excluded from git (`.gitignore`). The published runs' arrays are in the `caption-runs-v1` release.
