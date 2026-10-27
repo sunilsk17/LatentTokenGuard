@@ -8,7 +8,9 @@ The model describes COCO images in free form. Each object it names is labelled r
 |---|---|---|
 | Tests | CPU | `python -m pytest tests/test_caption_bench.py tests/test_capture_consistency.py` |
 | Smoke test (random-weight LLaVA-1.5, 17 MB) | CPU | `python experiments/make_tiny_llava.py` then `python experiments/caption_run.py --model tiny_llava15 --n_images 3` |
-| LLaVA-1.5-7B run | CUDA GPU (T4 with 4-bit, or A100 with fp16) | `notebooks/caption_benchmark_cloud.ipynb`, or `python experiments/caption_run.py --model llava15_7b --n_images 1000` |
+| Smoke test (random-weight Qwen2.5-VL, 67 MB; transformers >= 4.49) | CPU | `python experiments/make_tiny_qwen25vl.py` then `python experiments/caption_run.py --model tiny_qwen25vl --n_images 3` |
+| LLaVA-1.5-7B / 13B run | CUDA GPU (T4 with 4-bit, or A100 with fp16) | `notebooks/caption_benchmark_cloud.ipynb`, or `python experiments/caption_run.py --model llava15_7b --n_images 1000` |
+| Qwen2.5-VL-7B run | CUDA GPU (T4 with 4-bit) | the same notebook with `MODEL = "qwen25vl_7b"` |
 | Evaluation | CPU | `python experiments/caption_eval.py --run <run dir>` |
 
 LLaVA-1.5-7B needs about 14 GB in fp16, and 4-bit loading requires CUDA. Evaluation uses only the saved run folder, so it can run on any machine.
@@ -20,7 +22,9 @@ LLaVA-1.5-7B needs about 14 GB in fp16, and 4-bit loading requires CUDA. Evaluat
    - the hidden states of every layer at the image-token positions and at each generated token
    - the logits that produced each token
 
-   No second forward pass is made. `tests/test_capture_consistency.py` checks these tensors against a separate full forward pass on transformers 4.43 and 5.x.
+   No second forward pass is made. `tests/test_capture_consistency.py` checks these tensors against a separate full forward pass on transformers 4.43 and 5.x, for LLaVA-1.5 and Qwen2.5-VL.
+   - LLaVA-1.5 has 576 image tokens per image.
+   - Qwen2.5-VL has one image token per merged 28×28 pixel block, so the count depends on image size (about 350–400 for a COCO image).
 2. **Labelling** (`caption_bench/chair.py`). COCO objects are extracted with the CHAIR synonym list and phrase rules. Ground truth is the instance annotations plus the objects named in the five reference captions.
 3. **Features** (`caption_bench/features.py`), taken at each object's first sub-token:
    - NLL and entropy
@@ -57,5 +61,6 @@ Each run folder contains:
 ## Notes
 
 - 4-bit (T4) and fp16 (A100) runs produce different hidden states. Compare detectors only within one run.
+- Decoding is greedy. Qwen2.5-VL runs use its default `repetition_penalty` of 1.05 (`generate_kwargs` in the config, recorded in `run.json`). NLL, entropy and Internal Confidence use the raw logits, before any penalty.
 - `feature_seconds` in `captions.jsonl` times every layer pair plus Internal Confidence. A deployed detector computes a single layer pair, so its overhead should be timed separately against `gen_seconds`.
 - Feature arrays are excluded from git (`.gitignore`). Publish them with the release that accompanies the paper.

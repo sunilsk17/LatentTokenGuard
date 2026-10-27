@@ -11,10 +11,14 @@ One call to `generate()` returns all inputs the detectors use:
 There is no second forward pass, so detection cost is the cost of the
 similarity maths on tensors that generation already computed.
 
-Works with any HuggingFace `LlavaForConditionalGeneration` checkpoint
-(llava-hf/llava-1.5-7b-hf, llava-hf/llava-interleave-qwen-0.5b-hf, the
-tiny random test model) and with both transformers conventions for image
-tokens: expanded inside the model (<= 4.46) or by the processor (newer).
+Supported model families (the `family` key of a model config):
+  - "llava" (default): any `LlavaForConditionalGeneration` checkpoint
+    (llava-hf/llava-1.5-7b-hf, -13b-hf, the tiny random test model), with
+    both transformers conventions for image tokens: expanded inside the
+    model (<= 4.46) or by the processor (newer)
+  - "qwen2_5_vl": Qwen2.5-VL (transformers >= 4.49). The processor expands
+    the image placeholder into one token per merged 28x28 patch, so the
+    number of image tokens depends on the image size.
 """
 
 import logging
@@ -69,8 +73,12 @@ class LlavaCapturer:
     # Loading
     # ──────────────────────────────────────────────────────────────────────────
 
+    def _model_class(self):
+        from transformers import LlavaForConditionalGeneration
+        return LlavaForConditionalGeneration
+
     def load(self):
-        from transformers import AutoProcessor, LlavaForConditionalGeneration
+        from transformers import AutoProcessor
 
         model_id = self.cfg["id"]
         load_in_4bit = self.cfg.get("load_in_4bit", False) and self.device == "cuda"
@@ -95,7 +103,7 @@ class LlavaCapturer:
             )
             kwargs["device_map"] = {"": 0}
 
-        self.model = LlavaForConditionalGeneration.from_pretrained(model_id, **kwargs)
+        self.model = self._model_class().from_pretrained(model_id, **kwargs)
         if not load_in_4bit:
             self.model.to(self.device)
         self.model.eval()
@@ -107,6 +115,7 @@ class LlavaCapturer:
         import transformers
         return {
             "model_id": self.cfg["id"],
+            "family": self.cfg.get("family", "llava"),
             "device": self.device,
             "dtype": str(self.dtype),
             "load_in_4bit": self.load_in_4bit,
@@ -161,6 +170,7 @@ class LlavaCapturer:
                 output_hidden_states=True,
                 output_logits=True,
                 return_dict_in_generate=True,
+                **self.cfg.get("generate_kwargs", {}),
             )
         if self.device == "cuda":
             torch.cuda.synchronize()
@@ -206,6 +216,28 @@ class LlavaCapturer:
         caption = tok.decode(ids, **kw)
         starts = [len(tok.decode(ids[:i], **kw)) for i in range(len(ids))]
         return caption, starts
+
+
+class QwenVLCapturer(LlavaCapturer):
+    """
+    Qwen2.5-VL. Generation, capture and the logit lens are shared with LLaVA:
+    the image tokens are found by `image_token_id` after processor expansion,
+    and the final norm sits at model.language_model.norm.
+    """
+
+    def _model_class(self):
+        from transformers import Qwen2_5_VLForConditionalGeneration
+        return Qwen2_5_VLForConditionalGeneration
+
+
+CAPTURERS = {"llava": LlavaCapturer, "qwen2_5_vl": QwenVLCapturer}
+
+
+def make_capturer(model_cfg: dict) -> LlavaCapturer:
+    family = model_cfg.get("family", "llava")
+    if family not in CAPTURERS:
+        raise ValueError(f"Unknown model family '{family}', expected one of {sorted(CAPTURERS)}")
+    return CAPTURERS[family](model_cfg)
 
 
 def token_at_char(token_starts: List[int], char: int) -> int:

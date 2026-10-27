@@ -41,6 +41,20 @@ models:
     device: "auto"
     max_new_tokens: 512
 
+  # Second model family. Needs transformers >= 4.49. T4 has no bfloat16, so
+  # compute runs in float16; check the 20-image captions before a full run.
+  # repetition_penalty 1.05 is Qwen's own default generation setting.
+  qwen25vl_7b:
+    family: "qwen2_5_vl"
+    id: "Qwen/Qwen2.5-VL-7B-Instruct"
+    prompt_template: "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{prompt}<|im_end|>\n<|im_start|>assistant\n"
+    dtype: "float16"
+    load_in_4bit: true
+    device: "auto"
+    max_new_tokens: 512
+    generate_kwargs:
+      repetition_penalty: 1.05
+
   # Small real model for local debugging (~1.7 GB download, runs on Apple MPS)
   llava_interleave_0p5b:
     id: "llava-hf/llava-interleave-qwen-0.5b-hf"
@@ -59,6 +73,17 @@ models:
     dtype: "float32"
     load_in_4bit: false
     use_fast_tokenizer: false
+    device: "cpu"
+    max_new_tokens: 40
+
+  # Random-weight Qwen2.5-VL with the real processor, for local tests.
+  # Build once with: python experiments/make_tiny_qwen25vl.py
+  tiny_qwen25vl:
+    family: "qwen2_5_vl"
+    id: "./cache/tiny-qwen25vl"
+    prompt_template: "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n<|im_start|>user\n<|vision_start|><|image_pad|><|vision_end|>{prompt}<|im_end|>\n<|im_start|>assistant\n"
+    dtype: "float32"
+    load_in_4bit: false
     device: "cpu"
     max_new_tokens: 40
 

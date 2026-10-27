@@ -45,7 +45,7 @@ import yaml
 from PIL import Image
 from tqdm import tqdm
 
-from caption_bench.capture import LlavaCapturer
+from caption_bench.capture import make_capturer
 from caption_bench.chair import ChairExtractor, CocoGroundTruth
 from caption_bench.features import STAT_NAMES, mention_features
 
@@ -162,7 +162,7 @@ def main():
     logger.info(f"{len(image_ids)} images sampled, {len(finished)} done, "
                 f"{len(todo)} to go in shard {shard}/{n_shards}")
 
-    capturer = LlavaCapturer(model_cfg)
+    capturer = make_capturer(model_cfg)
     capturer.load()
 
     run_info = {
@@ -171,6 +171,7 @@ def main():
         "prompt": config["prompt"],
         "prompt_template": model_cfg["prompt_template"],
         "max_new_tokens": model_cfg.get("max_new_tokens"),
+        "generate_kwargs": model_cfg.get("generate_kwargs", {}),
         "n_images": len(image_ids),
         "seed": args.seed,
         "stat_names": STAT_NAMES,

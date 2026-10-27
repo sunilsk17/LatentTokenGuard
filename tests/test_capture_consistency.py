@@ -2,8 +2,10 @@
 tests/test_capture_consistency.py
 Checks that single-pass capture returns the same hidden states and logits as
 a separate full forward pass over prompt + caption (the old two-pass method).
+Runs for every model family whose tiny test model is available:
 
-Needs the tiny model: python experiments/make_tiny_llava.py
+    python experiments/make_tiny_llava.py        # LLaVA-1.5
+    python experiments/make_tiny_qwen25vl.py     # Qwen2.5-VL (transformers >= 4.49)
 """
 
 import os
@@ -18,24 +20,42 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from caption_bench.capture import LlavaCapturer
+from caption_bench.capture import make_capturer
 from caption_bench.chair import Mention
 from caption_bench.features import STAT_NAMES, mention_features
 
-TINY = os.environ.get("TINY_LLAVA_PATH", os.path.join(ROOT, "cache", "tiny-llava15"))
 IMAGE = os.path.join(ROOT, "data", "coco", "val2017", "000000000139.jpg")
 PROMPT = "Please describe this image in detail."
 
-pytestmark = pytest.mark.skipif(not (os.path.isdir(TINY) and os.path.exists(IMAGE)),
-                                reason="tiny model or COCO image not available")
+TINY_MODELS = {
+    "tiny_llava15": os.environ.get("TINY_LLAVA_PATH", os.path.join(ROOT, "cache", "tiny-llava15")),
+    "tiny_qwen25vl": os.environ.get("TINY_QWEN_PATH", os.path.join(ROOT, "cache", "tiny-qwen25vl")),
+}
 
 
-@pytest.fixture(scope="module")
-def run():
+def _has_qwen() -> bool:
+    try:
+        from transformers import Qwen2_5_VLForConditionalGeneration  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _available(key: str) -> bool:
+    if key == "tiny_qwen25vl" and not _has_qwen():
+        return False
+    return os.path.isdir(TINY_MODELS[key]) and os.path.exists(IMAGE)
+
+
+@pytest.fixture(scope="module", params=[
+    pytest.param(k, marks=pytest.mark.skipif(not _available(k), reason=f"{k} or COCO image not available"))
+    for k in TINY_MODELS
+])
+def run(request):
     with open(os.path.join(ROOT, "configs", "caption_bench.yaml")) as f:
-        cfg = yaml.safe_load(f)["models"]["tiny_llava15"]
-    cfg = {**cfg, "id": TINY}
-    cap = LlavaCapturer(cfg)
+        cfg = yaml.safe_load(f)["models"][request.param]
+    cfg = {**cfg, "id": TINY_MODELS[request.param]}
+    cap = make_capturer(cfg)
     cap.load()
     image = Image.open(IMAGE).convert("RGB")
     out = cap.generate(image, PROMPT)
@@ -43,23 +63,38 @@ def run():
     inp = cap.processor(text=cfg["prompt_template"].format(prompt=PROMPT), images=image,
                         return_tensors="pt")
     full_ids = torch.cat([inp["input_ids"], torch.tensor([out.token_ids])], 1)
+    extra = {k: v for k, v in inp.items() if k not in ("input_ids", "attention_mask")}
+    # Per-token inputs (Qwen's mm_token_type_ids) cover the prompt; caption tokens are text (0)
+    n_new = len(out.token_ids)
+    for k, v in extra.items():
+        if v.dim() == 2 and v.shape == inp["input_ids"].shape:
+            extra[k] = torch.cat([v, v.new_zeros(1, n_new)], 1)
     with torch.no_grad():
-        ref = cap.model(input_ids=full_ids, pixel_values=inp["pixel_values"],
-                        attention_mask=torch.ones_like(full_ids), output_hidden_states=True)
-    return cap, out, inp, ref
+        ref = cap.model(input_ids=full_ids, attention_mask=torch.ones_like(full_ids),
+                        output_hidden_states=True, **extra)
+    return request.param, cap, out, inp, ref
+
+
+def _image_token(config) -> int:
+    token = getattr(config, "image_token_index", None)
+    return config.image_token_id if token is None else token
 
 
 def test_image_states_match_full_pass(run):
-    cap, out, inp, ref = run
+    key, cap, out, inp, ref = run
     P = out.image_states.shape[1]
-    assert P == 576
-    start = (inp["input_ids"][0] == cap.model.config.image_token_index).nonzero()[0].item()
+    hits = (inp["input_ids"][0] == _image_token(cap.model.config)).nonzero()[:, 0]
+    if key == "tiny_llava15":
+        assert P == 576
+    else:  # one token per merged 2x2 patch group: grid t*h*w / 4
+        assert P == len(hits) == int(inp["image_grid_thw"].prod()) // 4
+    start = hits[0].item()
     expected = torch.stack([h[0, start:start + P] for h in ref.hidden_states])
     assert torch.allclose(expected, out.image_states, atol=1e-4)
 
 
 def test_token_states_and_logits_match_full_pass(run):
-    cap, out, inp, ref = run
+    _, cap, out, inp, ref = run
     # Prefill length, whether <image> was expanded by the processor or the model
     prefix = ref.hidden_states[0].shape[1] - len(out.token_ids)
     for k in range(out.seq_states.shape[0]):
@@ -70,7 +105,7 @@ def test_token_states_and_logits_match_full_pass(run):
 
 
 def test_features_match_hand_computation(run):
-    cap, out, _, _ = run
+    _, cap, out, _, _ = run
     j = 2
     m = Mention("x", "dog", out.token_starts[j] + 1, out.token_starts[j] + 2)
     f = mention_features(cap, out, [m])
