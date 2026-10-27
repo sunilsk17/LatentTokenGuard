@@ -44,6 +44,8 @@ Each run folder contains:
 - `feats/<image_id>.npz`: per-object features
 - `eval/`: `eval.json`, `eval.md`, `layer_map.png`, `roc_test.png`
 
+`feats/` is too large for git. The feature files of the published runs are assets of the [`caption-runs-v1` release](https://github.com/sunilsk17/LatentTokenGuard/releases/tag/caption-runs-v1); unzip one into `results/caption_runs/` to re-run its evaluation.
+
 ## Detectors
 
 | Name | Description |
