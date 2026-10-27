@@ -108,11 +108,13 @@ def test_stratified_auroc():
     assert float(stratified_auroc(labels, scores, strata_one)) == pytest.approx(roc_auc_score(labels[:4], scores[:4]))
 
 
-def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False, hidden_dim=0):
+def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False, hidden_dim=0, glsim=False):
     """
     A run where layer pair (2, 1) 'max' separates hallucinations. With position_only,
     labels and that feature both follow the caption position and nothing else.
     With hidden_dim, also writes hidden/ where layer 3 carries the label along one direction.
+    With glsim, also writes glsim/ where the K=8 local score at object layer 3, image layer 2
+    is lower for hallucinations.
     """
     rng = np.random.default_rng(seed)
     pos_rng = np.random.default_rng(seed + 1)
@@ -120,6 +122,8 @@ def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False, hidden_d
     os.makedirs(path / "feats")
     if hidden_dim:
         os.makedirs(path / "hidden")
+    if glsim:
+        os.makedirs(path / "glsim")
     (path / "run.json").write_text(json.dumps({"stat_names": stat_names,
                                                "model": {"model_id": "fake"}}))
     with open(path / "captions.jsonl", "w") as f:
@@ -145,6 +149,12 @@ def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False, hidden_d
                 d = np.arange(layers)
                 np.savez(path / "hidden" / f"{img}.npz", token_index=positions.astype(np.int32),
                          at=at.astype(np.float16), check_max=grid[:, d, d, 0].astype(np.float32))
+            if glsim:
+                local = rng.uniform(0.2, 0.4, (m, layers, layers, 4))
+                local[:, 3, 2, 1] -= 0.3 * labels
+                np.savez(path / "glsim" / f"{img}.npz", token_index=positions.astype(np.int32),
+                         local=local.astype(np.float32),
+                         **{"global": rng.uniform(0.2, 0.4, (m, layers, layers)).astype(np.float32)})
 
 
 def test_evaluate_run_finds_planted_layer(tmp_path):
@@ -229,3 +239,18 @@ def test_runs_without_hidden_states_skip_the_probe(tmp_path):
     cv = crossfit_evaluate(table, CV_CFG)
     assert "Linear probe on hidden states" not in cv["detectors"]
     assert len(cv["comparisons"]) == 3
+
+
+def test_glsim_detector_finds_planted_setting(tmp_path):
+    _fake_run(tmp_path, n_images=150, glsim=True)
+    table = load_run(str(tmp_path))
+    assert table.glsim_local.shape[1:] == (4, 4, 4)
+    cfg = {"calib_fraction": 0.5, "split_seed": 0, "bootstrap": 20, "keep_real": 0.95}
+    res = evaluate_run(table, cfg)["detectors"]
+    assert "GLSim (published settings)" not in res          # fake model id has no published setting
+    sel = res["GLSim (settings chosen on calibration)"]["selection"]
+    assert (sel["object_layer"], sel["image_layer"], sel["K"]) == (3, 2, 8) and sel["w"] < 0.5
+    assert res["GLSim (settings chosen on calibration)"]["auroc"] > 0.9
+    cv = crossfit_evaluate(table, CV_CFG)
+    pairs = {(c["detector"], c["baseline"]) for c in cv["comparisons"]}
+    assert ("Best latent stat (at)", "GLSim (settings chosen on calibration)") in pairs

@@ -196,12 +196,13 @@ class LlavaCapturer:
         return Capture(caption, gen_ids, starts, image_states, seq_states, logits, gen_seconds)
 
     def teacher_force(self, image: Image.Image, prompt: str, caption: Optional[str] = None,
-                      token_ids: Optional[List[int]] = None):
+                      token_ids: Optional[List[int]] = None, with_prompt_state: bool = False):
         """
         One forward pass over prompt + an existing caption (no generation).
         The caption is given as text (re-tokenized) or as the generated token ids.
         Returns (caption_states (L+1, T, d), image_states (L+1, P, d), token_ids, token_starts),
         where caption_states[:, k] is the state at caption token k, i.e. Capture.seq_states[k + 1].
+        With with_prompt_state, the last prompt token's states (L+1, d) are appended.
         """
         text = self.cfg["prompt_template"].format(prompt=prompt)
         inputs = self.processor(text=text, images=image, return_tensors="pt")
@@ -230,6 +231,9 @@ class LlavaCapturer:
         image_pos = self._image_positions(prompt_ids[0].to(self.model.device), prefix)
         image_states = torch.stack([h[0, image_pos] for h in hidden])            # (L+1, P, d)
         _, starts = self._decode_with_offsets(token_ids)
+        if with_prompt_state:
+            prompt_state = torch.stack([h[0, prefix - 1] for h in hidden])         # (L+1, d)
+            return caption_states, image_states, token_ids, starts, prompt_state
         return caption_states, image_states, token_ids, starts
 
     def _image_positions(self, input_ids: torch.Tensor, prefill_len: int) -> torch.Tensor:

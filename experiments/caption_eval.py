@@ -34,7 +34,8 @@ logger = logging.getLogger(__name__)
 ROC_DETECTORS = ["NLL", "Token position", "Internal Confidence (calib layer)",
                  "Max-patch cosine, same layer (LTG/ContextualLens)",
                  "Best latent stat (at)", "Best latent stat, position-corrected",
-                 "Fusion: NLL + best latent", "Linear probe on hidden states"]
+                 "Fusion: NLL + best latent", "GLSim (settings chosen on calibration)",
+                 "Linear probe on hidden states"]
 
 
 def fmt_ci(value, ci):
@@ -46,6 +47,8 @@ def fmt_selections(selections: list) -> str:
     if not selections or selections[0] is None:
         return "–"
     def one(sel):
+        if "w" in sel:
+            return f"L{sel['object_layer']}/L{sel['image_layer']} K={sel['K']} w={sel['w']:g}"
         if "C" in sel:
             return f"L{sel['layer']} C={sel['C']:g}"
         if "layer" in sel:

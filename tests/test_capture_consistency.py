@@ -115,6 +115,30 @@ def test_teacher_force_matches_capture(run):
     assert torch.allclose(states[:, :n].transpose(0, 1), out.seq_states[1:], atol=1e-4)
 
 
+def test_glsim_features_match_the_paper_equations(run):
+    sys.path.insert(0, os.path.join(ROOT, "experiments"))
+    from caption_glsim import KS, glsim_features
+
+    _, cap, out, _, _ = run
+    states, image_states, ids, _, prompt_state = cap.teacher_force(
+        Image.open(IMAGE).convert("RGB"), PROMPT, token_ids=out.token_ids, with_prompt_state=True)
+    # the last prompt token is Capture.seq_states[0]
+    assert torch.allclose(prompt_state, out.seq_states[0], atol=1e-4)
+
+    pos = [1, 3]
+    local, glob = glsim_features(cap, states[:, pos].transpose(0, 1), image_states, prompt_state,
+                                 [ids[j] for j in pos])
+    m, lo, li, k = 1, 2, 3, KS.index(8)
+    o = F.normalize(states[lo, pos[m]], dim=-1)
+    h = image_states[li] if li == image_states.shape[0] - 1 else cap.final_norm()(image_states[li])
+    prob = F.softmax(cap.lm_head()(h).float(), -1)[:, ids[pos[m]]]          # Eq. 2: visual logit lens
+    top = prob.topk(8).indices
+    expected_local = (F.normalize(image_states[li][top], dim=-1) @ o).mean()  # Eq. 3
+    expected_global = F.normalize(prompt_state[li], dim=-1) @ o               # Eq. 4
+    assert local[m, lo, li, k] == pytest.approx(expected_local.item(), abs=1e-5)
+    assert glob[m, lo, li] == pytest.approx(expected_global.item(), abs=1e-5)
+
+
 def test_features_match_hand_computation(run):
     _, cap, out, _, _ = run
     j = 2

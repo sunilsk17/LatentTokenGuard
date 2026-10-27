@@ -12,7 +12,11 @@ The model describes COCO images in free form. Each object it names is labelled r
 | LLaVA-1.5-7B / 13B run | CUDA GPU (T4 with 4-bit, or A100 with fp16) | `notebooks/caption_benchmark_cloud.ipynb`, or `python experiments/caption_run.py --model llava15_7b --n_images 1000` |
 | Qwen2.5-VL-7B run | CUDA GPU (T4 with 4-bit) | the same notebook with `MODEL = "qwen25vl_7b"` |
 | Hidden states for the linear probe (after a run) | CUDA GPU | notebook section 8, or `python experiments/caption_hidden.py --model <key> --run <run dir>` |
+| GLSim scores for the baseline (after a run) | CUDA GPU | notebook section 9, or `python experiments/caption_glsim.py --model <key> --run <run dir>` |
 | Evaluation | CPU | `python experiments/caption_eval.py --run <run dir>` |
+| Label efficiency (latent statistic and probe fit on n labelled objects) | CPU | `python experiments/label_efficiency.py --run <run dir> --out results/paper/label_efficiency_<model>.json` |
+| Paper figures and numbers | CPU | `python experiments/paper_figures.py --out <dir>`, `python experiments/paper_numbers.py --out <dir>/numbers.tex` |
+| Manual label audit | CPU + a reviewer | `python experiments/make_label_audit.py --out <dir>`, open `<dir>/index.html`, then `python experiments/score_label_audit.py` |
 
 LLaVA-1.5-7B needs about 14 GB in fp16, and 4-bit loading requires CUDA. Evaluation uses only the saved run folder, so it can run on any machine.
 
@@ -44,10 +48,11 @@ Each run folder contains:
 - `run.json`: model, precision, library versions, git commit
 - `captions.jsonl`: captions and labelled mentions
 - `feats/<image_id>.npz`: per-object features
+- `glsim/<image_id>.npz` (optional): GLSim local and global similarities for every layer pair, first mentions only, from `experiments/caption_glsim.py`
 - `hidden/<image_id>.npz` (optional): object-token hidden states of every layer, first mentions only, from `experiments/caption_hidden.py`. That script re-reads each stored caption in one forward pass; `tests/test_capture_consistency.py` checks that this gives the same states as generation, and the evaluation compares a recomputed max-patch cosine with `feats/` and reports the difference in `eval.md`.
 - `eval/`: `eval.json`, `eval.md`, `layer_map.png`, `roc_test.png`
 
-`feats/` and `hidden/` are too large for git. The feature files of the published runs are assets of the [`caption-runs-v1` release](https://github.com/sunilsk17/LatentTokenGuard/releases/tag/caption-runs-v1); unzip one into `results/caption_runs/` to re-run its evaluation.
+`feats/`, `hidden/` and `glsim/` are too large for git. The feature files of the published runs are assets of the [`caption-runs-v1` release](https://github.com/sunilsk17/LatentTokenGuard/releases/tag/caption-runs-v1); unzip one into `results/caption_runs/` to re-run its evaluation.
 
 ## Detectors
 
@@ -63,6 +68,7 @@ Each run folder contains:
 | Best latent stat, position-corrected | Layers and statistic chosen by within-position AUROC on calibration; the score of a real object at the same position (cubic in log position, fit on real calibration objects) is subtracted |
 | Fusion | Rank average of NLL (and Internal Confidence) with the best latent statistic |
 | Linear probe on hidden states | Supervised: logistic regression on the object-token hidden state of one layer (SAPLMA-style, Azaria & Mitchell, 2023); needs `hidden/` |
+| GLSim | Park & Li (NeurIPS 2025): weighted sum of the cosine with the last prompt token (global) and the mean cosine with the K patches the logit lens ranks highest for the object (local). Reported with the published settings (LLaVA-1.5) and with settings chosen on calibration; needs `glsim/` |
 
 ## Notes
 

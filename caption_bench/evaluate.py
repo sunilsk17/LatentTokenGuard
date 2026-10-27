@@ -47,29 +47,38 @@ class MentionTable:
     n_dropped_nan: int = 0
     hidden: Optional[np.ndarray] = None  # (N, L+1, d) object-token states, if extracted
     hidden_check: Optional[dict] = None  # how well the extracted states reproduce grid_at
+    glsim_local: Optional[np.ndarray] = None   # (N, L+1, L+1, K) from experiments/caption_glsim.py
+    glsim_global: Optional[np.ndarray] = None  # (N, L+1, L+1)
+    model_id: str = ""
 
     def subset(self, mask: np.ndarray) -> "MentionTable":
+        pick = lambda a: None if a is None else a[mask]
         return MentionTable(
             self.image_ids[mask], self.labels[mask],
             [c for c, keep in zip(self.classes, mask) if keep],
             self.positions[mask], self.nll[mask], self.entropy[mask], self.ic[mask],
             self.grid_at[mask], self.grid_pre[mask], self.stat_names,
             self.all_image_ids, self.n_dropped_nan,
-            None if self.hidden is None else self.hidden[mask], self.hidden_check,
+            pick(self.hidden), self.hidden_check,
+            pick(self.glsim_local), pick(self.glsim_global), self.model_id,
         )
 
 
-def load_run(run_dir: str, first_mention_only: bool = True) -> MentionTable:
+def load_run(run_dir: str, first_mention_only: bool = True, hidden: bool = True) -> MentionTable:
     with open(os.path.join(run_dir, "run.json")) as f:
-        stat_names = json.load(f)["stat_names"]
+        run_info = json.load(f)
+    stat_names = run_info["stat_names"]
 
     # Object-token hidden states (experiments/caption_hidden.py) hold first mentions only
     hidden_dir = os.path.join(run_dir, "hidden")
-    with_hidden = first_mention_only and os.path.isdir(hidden_dir)
+    with_hidden = hidden and first_mention_only and os.path.isdir(hidden_dir)
+    # GLSim scores (experiments/caption_glsim.py), also first mentions only
+    glsim_dir = os.path.join(run_dir, "glsim")
+    with_glsim = first_mention_only and os.path.isdir(glsim_dir)
     max_col = stat_names.index("max")
 
-    rows = {k: [] for k in ("image_ids", "labels", "classes", "positions", "nll",
-                            "entropy", "ic", "grid_at", "grid_pre", "hidden", "check", "diag")}
+    rows = {k: [] for k in ("image_ids", "labels", "classes", "positions", "nll", "entropy", "ic",
+                            "grid_at", "grid_pre", "hidden", "check", "diag", "glocal", "gglobal")}
     all_ids = []
     with open(os.path.join(run_dir, "captions.jsonl")) as f:
         for line in f:
@@ -99,13 +108,25 @@ def load_run(run_dir: str, first_mention_only: bool = True) -> MentionTable:
                 grid = feats["grid_at"][keep][..., max_col]
                 d = np.arange(grid.shape[1])
                 rows["diag"].append(grid[:, d, d])
+            if with_glsim:
+                path = os.path.join(glsim_dir, f"{rec['image_id']}.npz")
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"{path} is missing; finish caption_glsim.py for this run")
+                gl = np.load(path)
+                if not np.array_equal(gl["token_index"], feats["token_index"][keep]):
+                    raise ValueError(f"Object token positions in {path} differ from feats/")
+                rows["glocal"].append(gl["local"])
+                rows["gglobal"].append(gl["global"])
 
     stack = lambda key: np.concatenate(rows[key]) if rows[key] else np.empty(0)
     table = MentionTable(
         np.array(rows["image_ids"]), np.array(rows["labels"]), rows["classes"],
         stack("positions"), stack("nll"), stack("entropy"), stack("ic"),
         stack("grid_at"), stack("grid_pre"), stat_names, np.array(sorted(set(all_ids))),
+        model_id=run_info.get("model", {}).get("model_id", ""),
     )
+    if with_glsim:
+        table.glsim_local, table.glsim_global = stack("glocal"), stack("gglobal")
     if with_hidden:
         table.hidden = stack("hidden")
         # Same-layer max cosine from the re-read states vs. the one stored at generation
@@ -298,6 +319,33 @@ def fit_probe_detector(calib: MentionTable, seed: int = 0):
         {"layer": layer, "C": c, "inner_auroc": max(by_c)}
 
 
+GLSIM_KS = (4, 8, 16, 32)                 # K values stored by experiments/caption_glsim.py
+GLSIM_WS = (0.0, 0.2, 0.4, 0.5, 0.6, 0.8, 1.0)
+# Settings published by Park & Li (NeurIPS 2025, Table 5): (image/prompt layer l, object layer l', K, w)
+GLSIM_PUBLISHED = {"llava-hf/llava-1.5-7b-hf": (32, 31, 32, 0.6),
+                   "llava-hf/llava-1.5-13b-hf": (40, 38, 32, 0.6)}
+
+
+def _glsim(table: MentionTable, l: int, lo: int, k: int, w: float) -> np.ndarray:
+    """GLSim is higher for real objects; negated so that higher means hallucinated."""
+    return -(w * table.glsim_global[:, lo, l] + (1 - w) * table.glsim_local[:, lo, l, GLSIM_KS.index(k)])
+
+
+def fit_glsim_detector(calib: MentionTable):
+    """GLSim with (l, l', K, w) chosen by calibration AUROC, like the other layer-selected detectors."""
+    best = (-1.0, None)
+    for k in GLSIM_KS:
+        local = calib.glsim_local[..., GLSIM_KS.index(k)]
+        for w in GLSIM_WS:
+            auc = fast_auroc(calib.labels, -(w * calib.glsim_global + (1 - w) * local))  # (L+1, L+1)
+            lo, l = np.unravel_index(np.argmax(auc), auc.shape)
+            if auc[lo, l] > best[0]:
+                best = (float(auc[lo, l]), (int(l), int(lo), k, w))
+    l, lo, k, w = best[1]
+    return (lambda t: _glsim(t, l, lo, k, w)), \
+        {"image_layer": l, "object_layer": lo, "K": k, "w": w, "calib_auroc": best[0]}
+
+
 def rank_average(*scores: np.ndarray) -> np.ndarray:
     return np.mean([rankdata(s) / len(s) for s in scores], axis=0)
 
@@ -338,6 +386,15 @@ def build_detectors(calib: MentionTable, position_bins: int = 10
     dets["Fusion: NLL + best latent"] = lambda t: rank_average(t.nll, latent(t))
     ic = dets["Internal Confidence (calib layer)"]
     dets["Fusion: NLL + IC + best latent"] = lambda t: rank_average(t.nll, ic(t), latent(t))
+
+    # GLSim (Park & Li, NeurIPS 2025): needs experiments/caption_glsim.py
+    if calib.glsim_local is not None:
+        if calib.model_id in GLSIM_PUBLISHED:
+            l, lo, k, w = GLSIM_PUBLISHED[calib.model_id]
+            dets["GLSim (published settings)"] = lambda t: _glsim(t, l, lo, k, w)
+            info["GLSim (published settings)"] = {"image_layer": l, "object_layer": lo, "K": k, "w": w}
+        dets["GLSim (settings chosen on calibration)"], info["GLSim (settings chosen on calibration)"] = \
+            fit_glsim_detector(calib)
 
     # Supervised baseline: needs the hidden states from experiments/caption_hidden.py
     if calib.hidden is not None:
@@ -446,8 +503,10 @@ PAIRED_COMPARISONS = [
     ("Best latent stat (at)", "NLL"),
     ("Best latent stat (at)", "Internal Confidence (calib layer)"),
     ("Fusion: NLL + best latent", "NLL"),
-    # only when hidden states were extracted
+    # only when hidden states / GLSim scores were extracted
     ("Best latent stat (at)", "Linear probe on hidden states"),
+    ("Best latent stat (at)", "GLSim (settings chosen on calibration)"),
+    ("Best latent stat (at)", "GLSim (published settings)"),
 ]
 
 
