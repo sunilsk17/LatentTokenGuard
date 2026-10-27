@@ -13,6 +13,7 @@ Usage:
 """
 
 import argparse
+import glob
 import json
 import logging
 import os
@@ -171,6 +172,10 @@ def main():
 
     with open(args.config) as f:
         eval_cfg = yaml.safe_load(f)["evaluation"]
+    shards = glob.glob(os.path.join(args.run, "captions.shard*.jsonl"))
+    if shards:
+        sys.exit(f"Unmerged shard files in {args.run}; run "
+                 f"`python experiments/caption_run.py --merge --out {args.run}` first.")
     with open(os.path.join(args.run, "run.json")) as f:
         run_info = json.load(f)
 

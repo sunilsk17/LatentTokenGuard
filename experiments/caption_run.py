@@ -12,16 +12,23 @@ Outputs, in --out:
   captions.jsonl      one line per image: caption, mentions with labels
   feats/<id>.npz      feature arrays for that image's mentions
 
-The run is resumable: images already in captions.jsonl are skipped, so a
+The run is resumable: images already captioned in --out are skipped, so a
 Kaggle/Colab session can be restarted with the same command.
+
+With several GPUs, run one process per GPU with --shard K/N. Shard K captions
+every N-th image into captions.shardKofN.jsonl; --merge then folds the shard
+files into captions.jsonl.
 
 Usage:
     python experiments/caption_run.py --model tiny_llava15 --n_images 3
     python experiments/caption_run.py --model llava15_7b --n_images 1000 \
         --out results/caption_runs/llava15_7b_n1000
+    CUDA_VISIBLE_DEVICES=1 python experiments/caption_run.py ... --shard 1/2
+    python experiments/caption_run.py --merge --out <run dir>
 """
 
 import argparse
+import glob
 import json
 import logging
 import os
@@ -59,11 +66,49 @@ def sample_images(gt: CocoGroundTruth, n: int, seed: int):
     return ids if n >= len(ids) else sorted(rng.sample(ids, n))
 
 
-def done_ids(path: str):
-    if not os.path.exists(path):
-        return set()
-    with open(path) as f:
-        return {json.loads(line)["image_id"] for line in f if line.strip()}
+def caption_files(out_dir: str):
+    return sorted(glob.glob(os.path.join(out_dir, "captions*.jsonl")))
+
+
+def done_ids(out_dir: str):
+    """Images captioned in any captions file of the run (merged or per shard)."""
+    ids = set()
+    for path in caption_files(out_dir):
+        with open(path) as f:
+            ids |= {json.loads(line)["image_id"] for line in f if line.strip()}
+    return ids
+
+
+def parse_shard(text: str):
+    k, n = (int(v) for v in text.split("/"))
+    if not 0 <= k < n:
+        raise ValueError(f"--shard must be K/N with 0 <= K < N, got {text}")
+    return k, n
+
+
+def merge_shards(out_dir: str):
+    """Append shard captions to captions.jsonl (skipping duplicates) and delete the shard files."""
+    merged = os.path.join(out_dir, "captions.jsonl")
+    seen = set()
+    if os.path.exists(merged):
+        with open(merged) as f:
+            seen = {json.loads(line)["image_id"] for line in f if line.strip()}
+    shards = [p for p in caption_files(out_dir) if p != merged]
+    added = 0
+    with open(merged, "a") as out:
+        for path in shards:
+            with open(path) as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    image_id = json.loads(line)["image_id"]
+                    if image_id not in seen:
+                        out.write(line if line.endswith("\n") else line + "\n")
+                        seen.add(image_id)
+                        added += 1
+    for path in shards:
+        os.remove(path)
+    logger.info(f"Merged {len(shards)} shard files: {added} images added, {len(seen)} in captions.jsonl")
 
 
 def main():
@@ -78,7 +123,18 @@ def main():
                    help="folder with instances_val2017.json and captions_val2017.json")
     p.add_argument("--limit", type=int, default=None,
                    help="caption at most this many new images, then stop (for timed sessions)")
+    p.add_argument("--shard", default="0/1",
+                   help="K/N: caption only every N-th image starting at K (one process per GPU)")
+    p.add_argument("--merge", action="store_true",
+                   help="merge shard caption files in --out into captions.jsonl and exit")
     args = p.parse_args()
+
+    if args.merge:
+        if not args.out:
+            p.error("--merge needs --out")
+        merge_shards(args.out)
+        return
+    shard, n_shards = parse_shard(args.shard)
 
     with open(args.config) as f:
         config = yaml.safe_load(f)
@@ -92,17 +148,19 @@ def main():
 
     out_dir = args.out or os.path.join("results", "caption_runs", f"{args.model}_n{args.n_images}_s{args.seed}")
     os.makedirs(os.path.join(out_dir, "feats"), exist_ok=True)
-    captions_path = os.path.join(out_dir, "captions.jsonl")
+    name = "captions.jsonl" if n_shards == 1 else f"captions.shard{shard}of{n_shards}.jsonl"
+    captions_path = os.path.join(out_dir, name)
 
     torch.manual_seed(args.seed)
     chair = ChairExtractor()
     gt = CocoGroundTruth(data_cfg["instances_file"], data_cfg["captions_file"], chair)
     image_ids = sample_images(gt, args.n_images, args.seed)
-    finished = done_ids(captions_path)
-    todo = [i for i in image_ids if i not in finished]
+    finished = done_ids(out_dir)
+    todo = [i for i in image_ids[shard::n_shards] if i not in finished]
     if args.limit is not None:
         todo = todo[:args.limit]
-    logger.info(f"{len(image_ids)} images sampled, {len(finished)} done, {len(todo)} to go")
+    logger.info(f"{len(image_ids)} images sampled, {len(finished)} done, "
+                f"{len(todo)} to go in shard {shard}/{n_shards}")
 
     capturer = LlavaCapturer(model_cfg)
     capturer.load()
@@ -119,11 +177,15 @@ def main():
         "git_commit": git_commit(),
         "data": data_cfg,
     }
-    with open(os.path.join(out_dir, "run.json"), "w") as f:
+    # Shards write identical run.json files; replace atomically so readers never see half a file
+    tmp = os.path.join(out_dir, f"run.json.tmp{shard}")
+    with open(tmp, "w") as f:
         json.dump(run_info, f, indent=2)
+    os.replace(tmp, os.path.join(out_dir, "run.json"))
 
+    desc = f"Captioning [{args.model}]" + (f" shard {shard}/{n_shards}" if n_shards > 1 else "")
     with open(captions_path, "a") as log:
-        for image_id in tqdm(todo, desc=f"Captioning [{args.model}]"):
+        for image_id in tqdm(todo, desc=desc):
             path = os.path.join(data_cfg["images_dir"], gt.file_names[image_id])
             image = Image.open(path).convert("RGB")
 
