@@ -5,7 +5,7 @@ Evaluation metrics
 Computes:
   - Accuracy
   - Precision, Recall, F1 Score (main metric)
-  - AUROC (robustness metric)
+  - AUROC (threshold-free)
   - Latency per sample
   - Confusion matrix
 

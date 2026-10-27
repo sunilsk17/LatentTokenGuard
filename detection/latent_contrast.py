@@ -2,8 +2,6 @@
 detection/latent_contrast.py
 Latent Contrast Engine
 
-This is the central novelty of the paper.
-
 Algorithm:
   For each content-bearing token t_i (noun, adjective, verb):
     1. Get text embedding:  T_i = hidden_state[i]           (hidden_dim,)
@@ -11,7 +9,7 @@ Algorithm:
     3. Compare with all visual patches V = {v_1, ..., v_M}:
          sim_i = max_j cosine(T_i, v_j)
     4. Aggregate:           alignment_score = mean(sim_i)
-    5. Hallucination score: H_align = 1 - alignment_score
+    5. Hallucination score: H_align = 1 - (alignment_score + 1) / 2
 
 Why max-pool over patches?
   A content word is grounded if it aligns with *any* visual region.

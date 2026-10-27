@@ -7,7 +7,7 @@ Compares three detection modes on POPE-adversarial:
   2. Contrast only    (Module 4 only)
   3. Combined         (Module 3 + 4 weighted)
 
-Also sweeps detection thresholds to show robustness.
+Also sweeps detection thresholds to measure sensitivity to the threshold.
 
 Usage:
     python experiments/ablation.py --model phi3 --n_samples 100

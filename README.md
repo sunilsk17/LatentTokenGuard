@@ -10,8 +10,8 @@ tensors that generation already produces, so it needs no second model and no ext
 and it needs no labelled training data: only the layer pair and the statistic are chosen on a
 calibration split.
 
-This repository contains the method, a free-form captioning benchmark built to evaluate it
-rigorously, the results for three models, and all data needed to reproduce them.
+This repository contains the method, a free-form captioning benchmark with position-controlled,
+cross-fitted evaluation, results for three models, and all data needed to reproduce them.
 
 ## Results
 
@@ -22,8 +22,9 @@ cross-fitted over 5 folds of images, so every image is scored exactly once by de
 other images.
 
 Objects named late in a long caption are hallucinated far more often than early ones, and token
-position alone reaches 74–84 AUROC. The column that matters is therefore **AUROC within caption-position
-bins** (deciles of the object's token index), where position carries no information.
+position alone reaches 74–84 AUROC. Every detector is therefore also scored **within
+caption-position bins** (deciles of the object's token index), where position carries no
+information.
 
 | Detector | Training data | LLaVA-1.5-7B | LLaVA-1.5-13B | Qwen2.5-VL-7B |
 |---|---|---|---|---|
@@ -54,16 +55,17 @@ Findings:
   Qwen2.5-VL, whose token probabilities carry little signal, by more than 20 points.
 - **It adds information that NLL lacks.** Adding it to NLL raises within-position AUROC by
   8.5–15.8 points on every model.
-- **The best layers sit in the middle of the network** for all three models (for example text
-  layer 16–20 and image layer 13 of 28 for Qwen2.5-VL).
-- **A supervised probe is stronger.** A logistic-regression probe trained on the object-token
-  hidden state with ~2,600 labelled objects gains another 5–9 points. LatentTokenGuard needs no
-  labels and points to the image region an object matches; the probe needs labels for each model,
-  and its detect-then-remove threshold transfers less well (it keeps 88–91% of real objects at a
-  95% target, against 95% for LatentTokenGuard).
+- **The selected layers sit in the middle of the language model or just above it** (object-token
+  layer / image-token layer, across folds): 19–25 / 22–26 of 32 for LLaVA-1.5-7B, 22–25 / 22–29
+  of 40 for LLaVA-1.5-13B, and 16–20 / 12–13 of 28 for Qwen2.5-VL.
+- **A supervised probe gives an upper reference.** A logistic-regression probe trained on the
+  object-token hidden state with ~2,600 labelled objects scores 5–9 points higher. LatentTokenGuard
+  needs no labels, and its score comes directly from the image patches the object matches; the
+  probe needs labelled data for each model, and its detect-then-remove threshold transfers less
+  reliably (it keeps 88–91% of real objects at a 95% target, against 95% for LatentTokenGuard).
 - **Detect-then-remove.** On the held-out test images, dropping flagged objects at a threshold
-  that keeps 95% of real calibration objects lowers CHAIR_i (unique objects) from 25.7 to 15.8 (LLaVA-1.5-7B), 22.7 to 14.9 (13B) and 15.4 to
-  10.6 (Qwen2.5-VL).
+  that keeps 95% of real calibration objects lowers CHAIR_i (unique objects) from 25.7 to 15.8
+  (LLaVA-1.5-7B), 22.7 to 14.9 (LLaVA-1.5-13B) and 15.4 to 10.6 (Qwen2.5-VL).
 
 Full tables, including a held-out split, AUPR, every detector variant and the selected layers, are
 in `results/caption_runs/<run>/eval/eval.md`. The protocol is described in
@@ -140,11 +142,11 @@ main.py, models/, detection/, data/, evaluation/   earlier POPE pipeline (see be
 
 ## Earlier experiments: POPE
 
-The first version of LatentTokenGuard was evaluated on POPE yes/no questions with token-level
-scores (LLaVA-1.5-7B: 78.3 AUROC on POPE-adversarial). Those results and their code are kept for
-reference in [RESULTS.md](RESULTS.md) and `main.py`. POPE answers are a single "yes" or "no", so a
-detector can score well there by reflecting the model's own answer rather than its grounding; the
-caption benchmark above was built to remove that shortcut and is the evaluation to cite.
+The first version of LatentTokenGuard was developed on POPE yes/no questions, where it separates
+absent from present objects with 78.3 AUROC on LLaVA-1.5-7B. On POPE the model's own yes/no answer
+is already a strong signal for the same label (79.8 AUROC), so a yes/no benchmark cannot isolate
+what a detector adds. This led to the free-form caption benchmark above. The POPE results, the
+analysis and the code (`main.py`) are in [RESULTS.md](RESULTS.md).
 
 ## Citation
 
