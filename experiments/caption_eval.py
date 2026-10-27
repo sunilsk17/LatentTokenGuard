@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 ROC_DETECTORS = ["NLL", "Token position", "Internal Confidence (calib layer)",
                  "Max-patch cosine, same layer (LTG/ContextualLens)",
                  "Best latent stat (at)", "Best latent stat, position-corrected",
-                 "Fusion: NLL + best latent"]
+                 "Fusion: NLL + best latent", "Linear probe on hidden states"]
 
 
 def fmt_ci(value, ci):
@@ -46,6 +46,8 @@ def fmt_selections(selections: list) -> str:
     if not selections or selections[0] is None:
         return "–"
     def one(sel):
+        if "C" in sel:
+            return f"L{sel['layer']} C={sel['C']:g}"
         if "layer" in sel:
             return f"L{sel['layer']}"
         return f"{sel['state']} L{sel['text_layer']}/L{sel['image_layer']} {sel['stat']} ({sel['sign']})"
@@ -99,6 +101,13 @@ def write_markdown(result: dict, run_info: dict, path: str):
         f"CHAIR on test captions: CHAIR_i {100 * result['chair_test']['CHAIR_i']:.1f}, "
         f"CHAIR_s {100 * result['chair_test']['CHAIR_s']:.1f}",
         "",
+    ]
+    if "hidden_check" in s:
+        hc = s["hidden_check"]
+        lines += [f"Hidden states for the linear probe were re-read from the stored captions; "
+                  f"their same-layer max cosine differs from the one recorded at generation by "
+                  f"{hc['median_abs_diff']:.1e} (median), {hc['max_abs_diff']:.1e} (max).", ""]
+    lines += [
         f"Hallucinated share by caption-position bin, earliest to latest ({len(share)} bins): "
         + ", ".join(f"{100 * v:.0f}%" for v in share),
         "",
@@ -149,7 +158,7 @@ def plot_roc(table, eval_cfg, path: str):
     dets, _ = build_detectors(calib, eval_cfg.get("position_bins", 10))
 
     plt.figure(figsize=(6, 5))
-    for name in ROC_DETECTORS:
+    for name in [n for n in ROC_DETECTORS if n in dets]:
         fpr, tpr, _ = roc_curve(test.labels, dets[name](test))
         plt.plot(fpr, tpr, lw=1.8, label=name)
     plt.plot([0, 1], [0, 1], ":", color="grey")

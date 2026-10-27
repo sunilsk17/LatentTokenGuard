@@ -37,3 +37,4 @@ __pycache__/
 
 # Caption benchmark feature arrays (hundreds of MB per run; publish as a release asset instead)
 results/caption_runs/*/feats/
+results/caption_runs/*/hidden/

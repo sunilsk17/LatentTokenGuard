@@ -13,6 +13,8 @@ Protocol (follows GLSim, NeurIPS 2025, with an explicit held-out split):
     scored within caption-position deciles, next to a token-position baseline
   - a cross-fitted variant (k folds over images) scores every image once as
     test data and compares detectors with a paired bootstrap
+  - when object-token hidden states were extracted (experiments/caption_hidden.py),
+    a trained linear probe on them is the supervised baseline
 """
 
 import json
@@ -43,6 +45,8 @@ class MentionTable:
     stat_names: List[str]
     all_image_ids: np.ndarray # every captioned image, including ones with no mentions
     n_dropped_nan: int = 0
+    hidden: Optional[np.ndarray] = None  # (N, L+1, d) object-token states, if extracted
+    hidden_check: Optional[dict] = None  # how well the extracted states reproduce grid_at
 
     def subset(self, mask: np.ndarray) -> "MentionTable":
         return MentionTable(
@@ -51,6 +55,7 @@ class MentionTable:
             self.positions[mask], self.nll[mask], self.entropy[mask], self.ic[mask],
             self.grid_at[mask], self.grid_pre[mask], self.stat_names,
             self.all_image_ids, self.n_dropped_nan,
+            None if self.hidden is None else self.hidden[mask], self.hidden_check,
         )
 
 
@@ -58,8 +63,13 @@ def load_run(run_dir: str, first_mention_only: bool = True) -> MentionTable:
     with open(os.path.join(run_dir, "run.json")) as f:
         stat_names = json.load(f)["stat_names"]
 
+    # Object-token hidden states (experiments/caption_hidden.py) hold first mentions only
+    hidden_dir = os.path.join(run_dir, "hidden")
+    with_hidden = first_mention_only and os.path.isdir(hidden_dir)
+    max_col = stat_names.index("max")
+
     rows = {k: [] for k in ("image_ids", "labels", "classes", "positions", "nll",
-                            "entropy", "ic", "grid_at", "grid_pre")}
+                            "entropy", "ic", "grid_at", "grid_pre", "hidden", "check", "diag")}
     all_ids = []
     with open(os.path.join(run_dir, "captions.jsonl")) as f:
         for line in f:
@@ -77,6 +87,18 @@ def load_run(run_dir: str, first_mention_only: bool = True) -> MentionTable:
             rows["positions"].append(feats["token_index"][keep])
             for key in ("nll", "entropy", "ic", "grid_at", "grid_pre"):
                 rows[key].append(feats[key][keep])
+            if with_hidden:
+                path = os.path.join(hidden_dir, f"{rec['image_id']}.npz")
+                if not os.path.exists(path):
+                    raise FileNotFoundError(f"{path} is missing; finish caption_hidden.py for this run")
+                hid = np.load(path)
+                if not np.array_equal(hid["token_index"], feats["token_index"][keep]):
+                    raise ValueError(f"Object token positions in {path} differ from feats/")
+                rows["hidden"].append(hid["at"])
+                rows["check"].append(hid["check_max"])
+                grid = feats["grid_at"][keep][..., max_col]
+                d = np.arange(grid.shape[1])
+                rows["diag"].append(grid[:, d, d])
 
     stack = lambda key: np.concatenate(rows[key]) if rows[key] else np.empty(0)
     table = MentionTable(
@@ -84,6 +106,14 @@ def load_run(run_dir: str, first_mention_only: bool = True) -> MentionTable:
         stack("positions"), stack("nll"), stack("entropy"), stack("ic"),
         stack("grid_at"), stack("grid_pre"), stat_names, np.array(sorted(set(all_ids))),
     )
+    if with_hidden:
+        table.hidden = stack("hidden")
+        # Same-layer max cosine from the re-read states vs. the one stored at generation
+        diff = np.abs(stack("check") - stack("diag"))
+        diff = diff[np.isfinite(diff).all(1)]
+        table.hidden_check = {"max_abs_diff": float(diff.max()),
+                              "median_abs_diff": float(np.median(diff)),
+                              "share_above_0.01": float((diff.max(1) > 0.01).mean())}
     # A mention whose first token is the final generated token has no "at" state
     finite = np.isfinite(table.grid_at.reshape(len(table.labels), -1)).all(1)
     table = table.subset(finite)
@@ -231,6 +261,43 @@ def fit_position_correction(calib: MentionTable, base: Callable):
     return lambda t: base(t) - _position_basis(t.positions) @ coef
 
 
+PROBE_C = (1e-3, 1e-2, 1e-1)
+
+
+def fit_probe_detector(calib: MentionTable, seed: int = 0):
+    """
+    Trained linear probe on the object-token hidden state (SAPLMA-style, but linear):
+    standardized features, L2-regularized logistic regression. The layer and the
+    regularization strength are chosen on an inner split of the calibration images
+    (half to fit, half to score); the probe is then refit on all calibration rows.
+    """
+    from sklearn.linear_model import LogisticRegression
+
+    rng = np.random.default_rng(seed)
+    ids = np.unique(calib.image_ids)
+    rng.shuffle(ids)
+    inner = np.isin(calib.image_ids, ids[: len(ids) // 2])
+    y = calib.labels
+
+    def fit(x, labels, c):
+        mu, sd = x.mean(0), x.std(0) + 1e-6
+        clf = LogisticRegression(C=c, max_iter=2000).fit((x - mu) / sd, labels)
+        return lambda z: clf.decision_function((z - mu) / sd)
+
+    def inner_auroc(layer, c):
+        x = calib.hidden[:, layer].astype(np.float32)
+        s = fit(x[inner], y[inner], c)(x[~inner])
+        return float(roc_auc_score(y[~inner], s))
+
+    by_layer = [inner_auroc(l, PROBE_C[1]) for l in range(calib.hidden.shape[1])]
+    layer = int(np.argmax(by_layer))
+    by_c = [inner_auroc(layer, c) for c in PROBE_C]
+    c = PROBE_C[int(np.argmax(by_c))]
+    score = fit(calib.hidden[:, layer].astype(np.float32), y, c)
+    return (lambda t: score(t.hidden[:, layer].astype(np.float32))), \
+        {"layer": layer, "C": c, "inner_auroc": max(by_c)}
+
+
 def rank_average(*scores: np.ndarray) -> np.ndarray:
     return np.mean([rankdata(s) / len(s) for s in scores], axis=0)
 
@@ -271,6 +338,11 @@ def build_detectors(calib: MentionTable, position_bins: int = 10
     dets["Fusion: NLL + best latent"] = lambda t: rank_average(t.nll, latent(t))
     ic = dets["Internal Confidence (calib layer)"]
     dets["Fusion: NLL + IC + best latent"] = lambda t: rank_average(t.nll, ic(t), latent(t))
+
+    # Supervised baseline: needs the hidden states from experiments/caption_hidden.py
+    if calib.hidden is not None:
+        dets["Linear probe on hidden states"], info["Linear probe on hidden states"] = \
+            fit_probe_detector(calib)
     return dets, info
 
 
@@ -328,6 +400,8 @@ def evaluate_run(table: MentionTable, eval_cfg: dict) -> dict:
         "test": {"images": len(test_ids), "mentions": int(len(test.labels)),
                  "hallucinated": int(test.labels.sum())},
     }
+    if table.hidden_check is not None:
+        summary["hidden_check"] = table.hidden_check
     if len(set(calib.labels.tolist())) < 2 or len(set(test.labels.tolist())) < 2:
         summary["error"] = "Need both real and hallucinated objects in calib and test splits"
         return {"summary": summary}
@@ -372,6 +446,8 @@ PAIRED_COMPARISONS = [
     ("Best latent stat (at)", "NLL"),
     ("Best latent stat (at)", "Internal Confidence (calib layer)"),
     ("Fusion: NLL + best latent", "NLL"),
+    # only when hidden states were extracted
+    ("Best latent stat (at)", "Linear probe on hidden states"),
 ]
 
 
@@ -453,6 +529,8 @@ def crossfit_evaluate(table: MentionTable, eval_cfg: dict) -> dict:
 
     comparisons = []
     for a, b in PAIRED_COMPARISONS:
+        if a not in scores or b not in scores:
+            continue
         comparisons.append({"detector": a, "baseline": b,
                             **paired_bootstrap(table.labels, scores[a], scores[b],
                                                table.image_ids, strata, eval_cfg["bootstrap"])})

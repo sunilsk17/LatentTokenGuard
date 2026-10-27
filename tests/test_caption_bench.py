@@ -108,15 +108,18 @@ def test_stratified_auroc():
     assert float(stratified_auroc(labels, scores, strata_one)) == pytest.approx(roc_auc_score(labels[:4], scores[:4]))
 
 
-def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False):
+def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False, hidden_dim=0):
     """
     A run where layer pair (2, 1) 'max' separates hallucinations. With position_only,
     labels and that feature both follow the caption position and nothing else.
+    With hidden_dim, also writes hidden/ where layer 3 carries the label along one direction.
     """
     rng = np.random.default_rng(seed)
     pos_rng = np.random.default_rng(seed + 1)
     stat_names = ["max", "top4", "top8", "top16", "top32", "mean", "std", "global"]
     os.makedirs(path / "feats")
+    if hidden_dim:
+        os.makedirs(path / "hidden")
     (path / "run.json").write_text(json.dumps({"stat_names": stat_names,
                                                "model": {"model_id": "fake"}}))
     with open(path / "captions.jsonl", "w") as f:
@@ -136,6 +139,12 @@ def _fake_run(path, n_images=60, layers=4, seed=0, position_only=False):
                      entropy=rng.normal(size=m).astype(np.float32),
                      ic=rng.uniform(size=(m, layers)).astype(np.float32),
                      grid_at=grid.astype(np.float32), grid_pre=grid.astype(np.float32))
+            if hidden_dim:
+                at = rng.normal(size=(m, layers, hidden_dim))
+                at[:, 3, 0] += 2.0 * labels
+                d = np.arange(layers)
+                np.savez(path / "hidden" / f"{img}.npz", token_index=positions.astype(np.int32),
+                         at=at.astype(np.float16), check_max=grid[:, d, d, 0].astype(np.float32))
 
 
 def test_evaluate_run_finds_planted_layer(tmp_path):
@@ -197,3 +206,26 @@ def test_crossfit_position_only_signal_vanishes_within_bins(tmp_path):
     cv = crossfit_evaluate(load_run(str(tmp_path)), {**CV_CFG, "position_bins": 10})
     assert cv["detectors"]["Best latent stat (at)"]["auroc"] > 0.75
     assert abs(cv["detectors"]["Best latent stat (at)"]["auroc_pos"] - 0.5) < 0.1
+
+
+def test_linear_probe_on_hidden_states(tmp_path):
+    _fake_run(tmp_path, n_images=200, hidden_dim=16)
+    table = load_run(str(tmp_path))
+    assert table.hidden.shape[1:] == (4, 16)
+    assert table.hidden_check["max_abs_diff"] < 1e-6
+    cfg = {"calib_fraction": 0.5, "split_seed": 0, "bootstrap": 20, "keep_real": 0.95}
+    res = evaluate_run(table, cfg)
+    probe = res["detectors"]["Linear probe on hidden states"]
+    assert probe["selection"]["layer"] == 3 and probe["auroc"] > 0.8
+    cv = crossfit_evaluate(table, CV_CFG)
+    pairs = {(c["detector"], c["baseline"]) for c in cv["comparisons"]}
+    assert ("Best latent stat (at)", "Linear probe on hidden states") in pairs
+
+
+def test_runs_without_hidden_states_skip_the_probe(tmp_path):
+    _fake_run(tmp_path, n_images=80)
+    table = load_run(str(tmp_path))
+    assert table.hidden is None
+    cv = crossfit_evaluate(table, CV_CFG)
+    assert "Linear probe on hidden states" not in cv["detectors"]
+    assert len(cv["comparisons"]) == 3

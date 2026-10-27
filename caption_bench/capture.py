@@ -11,6 +11,9 @@ One call to `generate()` returns all inputs the detectors use:
 There is no second forward pass, so detection cost is the cost of the
 similarity maths on tensors that generation already computed.
 
+`teacher_force()` re-reads an existing caption in one forward pass; it is
+used to extract hidden states for the trained-probe baseline after a run.
+
 Supported model families (the `family` key of a model config):
   - "llava" (default): any `LlavaForConditionalGeneration` checkpoint
     (llava-hf/llava-1.5-7b-hf, -13b-hf, the tiny random test model), with
@@ -191,6 +194,43 @@ class LlavaCapturer:
 
         caption, starts = self._decode_with_offsets(gen_ids)
         return Capture(caption, gen_ids, starts, image_states, seq_states, logits, gen_seconds)
+
+    def teacher_force(self, image: Image.Image, prompt: str, caption: Optional[str] = None,
+                      token_ids: Optional[List[int]] = None):
+        """
+        One forward pass over prompt + an existing caption (no generation).
+        The caption is given as text (re-tokenized) or as the generated token ids.
+        Returns (caption_states (L+1, T, d), image_states (L+1, P, d), token_ids, token_starts),
+        where caption_states[:, k] is the state at caption token k, i.e. Capture.seq_states[k + 1].
+        """
+        text = self.cfg["prompt_template"].format(prompt=prompt)
+        inputs = self.processor(text=text, images=image, return_tensors="pt")
+        if token_ids is None:
+            token_ids = self.processor.tokenizer(caption, add_special_tokens=False)["input_ids"]
+        n_cap = len(token_ids)
+        prompt_ids = inputs["input_ids"]
+        full_ids = torch.cat([prompt_ids, torch.tensor([token_ids], dtype=prompt_ids.dtype)], 1)
+        extra = {k: v for k, v in inputs.items() if k not in ("input_ids", "attention_mask")}
+        # Per-token inputs (Qwen's mm_token_type_ids) cover the prompt; caption tokens are text (0)
+        for k, v in extra.items():
+            if v.dim() == 2 and v.shape == prompt_ids.shape:
+                extra[k] = torch.cat([v, v.new_zeros(1, n_cap)], 1)
+        extra = {k: v.to(self.model.device) for k, v in extra.items()}
+        if "pixel_values" in extra:
+            extra["pixel_values"] = extra["pixel_values"].to(self.dtype)
+        full_ids = full_ids.to(self.model.device)
+
+        with torch.no_grad():
+            out = self.model(input_ids=full_ids, attention_mask=torch.ones_like(full_ids),
+                             output_hidden_states=True, **extra)
+        hidden = out.hidden_states                                               # L+1 x (1, S, d)
+        # Prefill length, whether <image> was expanded by the processor or the model
+        prefix = hidden[0].shape[1] - n_cap
+        caption_states = torch.stack([h[0, prefix:] for h in hidden])            # (L+1, T, d)
+        image_pos = self._image_positions(prompt_ids[0].to(self.model.device), prefix)
+        image_states = torch.stack([h[0, image_pos] for h in hidden])            # (L+1, P, d)
+        _, starts = self._decode_with_offsets(token_ids)
+        return caption_states, image_states, token_ids, starts
 
     def _image_positions(self, input_ids: torch.Tensor, prefill_len: int) -> torch.Tensor:
         """Positions of the image tokens in the prefill sequence."""

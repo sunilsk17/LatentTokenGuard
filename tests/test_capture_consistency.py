@@ -104,6 +104,17 @@ def test_token_states_and_logits_match_full_pass(run):
     assert torch.allclose(ref_logits, out.logits, atol=1e-4)
 
 
+def test_teacher_force_matches_capture(run):
+    _, cap, out, _, _ = run
+    states, image_states, ids, starts = cap.teacher_force(
+        Image.open(IMAGE).convert("RGB"), PROMPT, token_ids=out.token_ids)
+    assert ids == out.token_ids and starts == out.token_starts
+    assert torch.allclose(image_states, out.image_states, atol=1e-4)
+    # caption token k is Capture.seq_states[k + 1]
+    n = out.seq_states.shape[0] - 1
+    assert torch.allclose(states[:, :n].transpose(0, 1), out.seq_states[1:], atol=1e-4)
+
+
 def test_features_match_hand_computation(run):
     _, cap, out, _, _ = run
     j = 2

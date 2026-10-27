@@ -11,6 +11,7 @@ The model describes COCO images in free form. Each object it names is labelled r
 | Smoke test (random-weight Qwen2.5-VL, 67 MB; transformers >= 4.49) | CPU | `python experiments/make_tiny_qwen25vl.py` then `python experiments/caption_run.py --model tiny_qwen25vl --n_images 3` |
 | LLaVA-1.5-7B / 13B run | CUDA GPU (T4 with 4-bit, or A100 with fp16) | `notebooks/caption_benchmark_cloud.ipynb`, or `python experiments/caption_run.py --model llava15_7b --n_images 1000` |
 | Qwen2.5-VL-7B run | CUDA GPU (T4 with 4-bit) | the same notebook with `MODEL = "qwen25vl_7b"` |
+| Hidden states for the linear probe (after a run) | CUDA GPU | notebook section 8, or `python experiments/caption_hidden.py --model <key> --run <run dir>` |
 | Evaluation | CPU | `python experiments/caption_eval.py --run <run dir>` |
 
 LLaVA-1.5-7B needs about 14 GB in fp16, and 4-bit loading requires CUDA. Evaluation uses only the saved run folder, so it can run on any machine.
@@ -36,15 +37,17 @@ LLaVA-1.5-7B needs about 14 GB in fp16, and 4-bit loading requires CUDA. Evaluat
    - Test-set AUROC and AUPR are reported, with 95% bootstrap intervals over images. The positive class is a hallucinated object.
    - Objects named late in a long caption are hallucinated far more often than early ones (Zhou et al., ICLR 2024), and hidden-state similarity also drifts with position. Every detector is therefore also scored within caption-position bins: deciles of the object's token index, with edges set on calibration. The reported value is the size-weighted mean AUROC over bins.
    - Detect-then-remove: CHAIR_i and CHAIR_s are reported before and after removing flagged objects, at a threshold that keeps 95% of real calibration objects.
-   - Cross-fitting (`cv_folds`, default 5) repeats the procedure over folds of images, so every image is scored once as test data. Each fold's scores are converted to percentiles of the fitting folds' scores before pooling. Detectors are compared with a paired bootstrap over images, both overall and within position bins: the best latent statistic against NLL and Internal Confidence, and the NLL + latent fusion against NLL alone (does the latent score add information to NLL).
+   - Trained baseline: when `hidden/` exists, a linear probe (standardized features, L2-regularized logistic regression) is trained on the object-token hidden state. Its layer and regularization strength are chosen on an inner split of the calibration images, then it is refit on all of them. The latent statistic only selects a layer pair and a statistic, so the probe is the stronger, supervised reference.
+   - Cross-fitting (`cv_folds`, default 5) repeats the procedure over folds of images, so every image is scored once as test data. Each fold's scores are converted to percentiles of the fitting folds' scores before pooling. Detectors are compared with a paired bootstrap over images, both overall and within position bins: the best latent statistic against NLL and Internal Confidence, the NLL + latent fusion against NLL alone (does the latent score add information to NLL), and, with hidden states, the latent statistic against the linear probe.
 
 Each run folder contains:
 - `run.json`: model, precision, library versions, git commit
 - `captions.jsonl`: captions and labelled mentions
 - `feats/<image_id>.npz`: per-object features
+- `hidden/<image_id>.npz` (optional): object-token hidden states of every layer, first mentions only, from `experiments/caption_hidden.py`. That script re-reads each stored caption in one forward pass; `tests/test_capture_consistency.py` checks that this gives the same states as generation, and the evaluation compares a recomputed max-patch cosine with `feats/` and reports the difference in `eval.md`.
 - `eval/`: `eval.json`, `eval.md`, `layer_map.png`, `roc_test.png`
 
-`feats/` is too large for git. The feature files of the published runs are assets of the [`caption-runs-v1` release](https://github.com/sunilsk17/LatentTokenGuard/releases/tag/caption-runs-v1); unzip one into `results/caption_runs/` to re-run its evaluation.
+`feats/` and `hidden/` are too large for git. The feature files of the published runs are assets of the [`caption-runs-v1` release](https://github.com/sunilsk17/LatentTokenGuard/releases/tag/caption-runs-v1); unzip one into `results/caption_runs/` to re-run its evaluation.
 
 ## Detectors
 
@@ -59,10 +62,11 @@ Each run folder contains:
 | Best latent stat (at / pre) | Best statistic at the object token, or at the position that predicted it |
 | Best latent stat, position-corrected | Layers and statistic chosen by within-position AUROC on calibration; the score of a real object at the same position (cubic in log position, fit on real calibration objects) is subtracted |
 | Fusion | Rank average of NLL (and Internal Confidence) with the best latent statistic |
+| Linear probe on hidden states | Supervised: logistic regression on the object-token hidden state of one layer (SAPLMA-style, Azaria & Mitchell, 2023); needs `hidden/` |
 
 ## Notes
 
 - 4-bit (T4) and fp16 (A100) runs produce different hidden states. Compare detectors only within one run.
 - Decoding is greedy. Qwen2.5-VL runs use its default `repetition_penalty` of 1.05 (`generate_kwargs` in the config, recorded in `run.json`). NLL, entropy and Internal Confidence use the raw logits, before any penalty.
 - `feature_seconds` in `captions.jsonl` times every layer pair plus Internal Confidence. A deployed detector computes a single layer pair, so its overhead should be timed separately against `gen_seconds`.
-- Feature arrays are excluded from git (`.gitignore`). Publish them with the release that accompanies the paper.
+- Feature and hidden-state arrays are excluded from git (`.gitignore`). Publish them with the release that accompanies the paper.
